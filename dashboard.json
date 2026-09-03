@@ -1,0 +1,304 @@
+{
+  "title": "LLM Cost Guardian - Agent Observability",
+  "description": "Real-time cost, reliability, and security observability for multi-agent LLM pipelines.",
+  "widgets": [
+    {
+      "id": 1,
+      "definition": {
+        "title": "Cost per query (USD) by agent",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": ["avg", "min", "max", "value", "sum"],
+        "time": {},
+        "type": "timeseries",
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "query1",
+                "data_source": "metrics",
+                "query": "avg:llm.cost_usd{*} by {agent}"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "order_by": "values",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ]
+      },
+      "layout": { "x": 0, "y": 0, "width": 4, "height": 2 }
+    },
+    {
+      "id": 2,
+      "definition": {
+        "title": "Reliability score by agent",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": ["avg", "min", "max", "value"],
+        "time": {},
+        "type": "timeseries",
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "query1",
+                "data_source": "metrics",
+                "query": "avg:llm.reliability_score{*} by {agent}"
+              }
+            ],
+            "style": {
+              "palette": "green_to_red",
+              "order_by": "values",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ]
+      },
+      "layout": { "x": 4, "y": 0, "width": 4, "height": 2 }
+    },
+    {
+      "id": 3,
+      "definition": {
+        "title": "Hallucination score (higher is better)",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": ["avg", "min", "max", "value"],
+        "time": {},
+        "type": "timeseries",
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "query1",
+                "data_source": "metrics",
+                "query": "avg:llm.hallucination_score{*} by {agent}"
+              }
+            ],
+            "style": {
+              "palette": "green_to_orange",
+              "order_by": "values",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ]
+      },
+      "layout": { "x": 8, "y": 0, "width": 4, "height": 2 }
+    },
+    {
+      "id": 4,
+      "definition": {
+        "title": "Prompt injection risk by agent",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": ["avg", "min", "max", "value"],
+        "time": {},
+        "type": "timeseries",
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "query1",
+                "data_source": "metrics",
+                "query": "avg:llm.injection_risk{*} by {agent}"
+              }
+            ],
+            "style": {
+              "palette": "red_to_yellow",
+              "order_by": "values",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ]
+      },
+      "layout": { "x": 0, "y": 2, "width": 4, "height": 2 }
+    },
+    {
+      "id": 5,
+      "definition": {
+        "title": "PII exposure risk by agent",
+        "title_size": "16",
+        "title_align": "left",
+        "show_legend": true,
+        "legend_layout": "auto",
+        "legend_columns": ["avg", "min", "max", "value"],
+        "time": {},
+        "type": "timeseries",
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "name": "query1",
+                "data_source": "metrics",
+                "query": "avg:llm.pii_risk{*} by {agent}"
+              }
+            ],
+            "style": {
+              "palette": "reds",
+              "order_by": "values",
+              "line_type": "solid",
+              "line_width": "normal"
+            },
+            "display_type": "line"
+          }
+        ]
+      },
+      "layout": { "x": 4, "y": 2, "width": 4, "height": 2 }
+    },
+    {
+      "id": 6,
+      "definition": {
+        "title": "Agent latency distribution (ms)",
+        "title_size": "16",
+        "title_align": "left",
+        "time": {},
+        "type": "heatmap",
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "avg:llm.latency_ms{*} by {agent}"
+              }
+            ]
+          }
+        ]
+      },
+      "layout": { "x": 8, "y": 2, "width": 4, "height": 2 }
+    },
+    {
+      "id": 7,
+      "definition": {
+        "title": "Total tokens used by agent",
+        "title_size": "16",
+        "title_align": "left",
+        "time": {},
+        "type": "toplist",
+        "requests": [
+          {
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "sum:llm.tokens_used{*} by {agent}",
+                "aggregator": "sum"
+              }
+            ],
+            "response_format": "scalar",
+            "formulas": [
+              { "formula": "query1" }
+            ],
+            "sort": {
+              "count": 10,
+              "order_by": [
+                { "type": "formula", "index": 0, "order": "desc" }
+              ]
+            }
+          }
+        ],
+        "style": {
+          "display": {
+            "type": "stacked",
+            "legend": "automatic"
+          }
+        }
+      },
+      "layout": { "x": 0, "y": 4, "width": 4, "height": 2 }
+    },
+    {
+      "id": 8,
+      "definition": {
+        "title": "Total cost per user (USD)",
+        "title_size": "16",
+        "title_align": "left",
+        "time": {},
+        "type": "bar_chart",
+        "requests": [
+          {
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "query1",
+                "query": "sum:llm.cost_usd{*} by {user}",
+                "aggregator": "sum"
+              }
+            ],
+            "formulas": [
+              { "formula": "query1" }
+            ],
+            "sort": {
+              "count": 10,
+              "order_by": [
+                { "type": "formula", "index": 0, "order": "desc" }
+              ]
+            },
+            "response_format": "scalar"
+          }
+        ],
+        "style": {
+          "display": {
+            "type": "stacked",
+            "legend": "automatic"
+          }
+        }
+      },
+      "layout": { "x": 4, "y": 4, "width": 4, "height": 2 }
+    },
+    {
+      "id": 9,
+      "definition": {
+        "title": "Overall reliability (last 5 min)",
+        "title_size": "16",
+        "title_align": "left",
+        "time": {},
+        "type": "query_value",
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "name": "query1",
+                "data_source": "metrics",
+                "query": "avg:llm.reliability_score{*}.rollup(avg, 300)",
+                "aggregator": "avg"
+              }
+            ]
+          }
+        ],
+        "autoscale": true,
+        "precision": 2,
+        "timeseries_background": { "type": "area" }
+      },
+      "layout": { "x": 8, "y": 4, "width": 4, "height": 2 }
+    }
+  ],
+  "template_variables": [],
+  "layout_type": "ordered",
+  "notify_list": [],
+  "reflow_type": "fixed",
+  "pause_auto_refresh": false
+}

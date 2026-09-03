@@ -82,7 +82,7 @@ class BaseAgent(ABC):
             api_key=self.api_key,
             session_id=f"{self.name}_{datetime.now(timezone.utc).isoformat()}",
             system_message=self.get_system_prompt()
-        ).with_model("gemini", "gemini-2.0-flash")
+        )
     
     @abstractmethod
     def get_system_prompt(self) -> str:
