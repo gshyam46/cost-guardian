@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ChevronRight, ShieldCheck } from 'lucide-react';
 import GuardianLayout from './GuardianLayout';
 import guardianApi from '@/services/guardianApi';
+import useLiveData from '@/hooks/useLiveData';
 
 const SEVERITY_STYLES = {
   high: 'bg-red-100 text-red-700',
@@ -22,27 +23,23 @@ const FILTERS = [
 
 const GuardianIncidents = () => {
   const navigate = useNavigate();
-  const [incidents, setIncidents] = useState([]);
   const [filter, setFilter] = useState('open');
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const response = await guardianApi.listIncidents(filter);
-        setIncidents(response.data);
-      } catch (error) {
-        toast.error('Could not load incidents');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [filter]);
+  const fetchIncidents = useCallback(
+    async () => (await guardianApi.listIncidents(filter)).data,
+    [filter],
+  );
+
+  const { data, loading, refreshing, error, lastUpdated } = useLiveData(fetchIncidents, {
+    refetchKey: filter,
+  });
+
+  if (error && !data) toast.error('Could not load incidents');
+
+  const incidents = data ?? [];
 
   return (
-    <GuardianLayout>
+    <GuardianLayout refreshing={refreshing} lastUpdated={lastUpdated}>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold text-slate-900">Incidents</h2>
         <div className="flex gap-1">

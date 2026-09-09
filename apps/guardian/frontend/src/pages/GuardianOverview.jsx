@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -7,6 +7,7 @@ import { DollarSign, Clock, AlertTriangle, Activity } from 'lucide-react';
 import GuardianLayout from './GuardianLayout';
 import { LineChart, BarChart } from './MiniChart';
 import guardianApi from '@/services/guardianApi';
+import useLiveData from '@/hooks/useLiveData';
 
 const SEVERITY_STYLES = {
   high: 'bg-red-100 text-red-700',
@@ -54,30 +55,26 @@ const byHour = (metrics) => {
 
 const GuardianOverview = () => {
   const navigate = useNavigate();
-  const [overview, setOverview] = useState(null);
-  const [metrics, setMetrics] = useState([]);
-  const [trends, setTrends] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [overviewRes, metricsRes, trendsRes] = await Promise.all([
-          guardianApi.getOverview(),
-          guardianApi.getMetrics(48),
-          guardianApi.getTrends(14),
-        ]);
-        setOverview(overviewRes.data);
-        setMetrics(metricsRes.data);
-        setTrends(trendsRes.data);
-      } catch (error) {
-        toast.error('Could not load Guardian data');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+  const fetchAll = useCallback(async () => {
+    const [overviewRes, metricsRes, trendsRes] = await Promise.all([
+      guardianApi.getOverview(),
+      guardianApi.getMetrics(48),
+      guardianApi.getTrends(14),
+    ]);
+    return { overview: overviewRes.data, metrics: metricsRes.data, trends: trendsRes.data };
   }, []);
+
+  const { data, loading, refreshing, error, lastUpdated } = useLiveData(fetchAll);
+
+  // Only shout about a failure that left us with nothing to show. A refresh that
+  // fails while good data is already on screen is a transient blip, not an event
+  // worth a toast every polling interval.
+  if (error && !data) toast.error('Could not load Guardian data');
+
+  const overview = data?.overview ?? null;
+  const metrics = data?.metrics ?? [];
+  const trends = data?.trends ?? [];
 
   const hourly = byHour(metrics);
   const totalCost = hourly.reduce((sum, h) => sum + h.cost, 0);
@@ -96,15 +93,15 @@ const GuardianOverview = () => {
   }
 
   return (
-    <GuardianLayout>
+    <GuardianLayout refreshing={refreshing} lastUpdated={lastUpdated}>
       {totalCalls === 0 && (
         <Card className="mb-6 border-amber-200 bg-amber-50">
           <CardContent className="pt-6">
             <p className="text-sm text-amber-900 font-medium">No telemetry yet</p>
             <p className="text-sm text-amber-800 mt-1">
               Guardian has not seen any LLM calls. Set <code>LANGFUSE_PUBLIC_KEY</code> and{' '}
-              <code>LANGFUSE_SECRET_KEY</code> in <code>backend/.env</code>, run the Founder Niche
-              Discovery pipeline, and start the worker with{' '}
+              <code>LANGFUSE_SECRET_KEY</code> in <code>apps/guardian/backend/.env</code>, run any
+              instrumented app, and start the worker with{' '}
               <code>python -m guardian.worker</code>.
             </p>
           </CardContent>

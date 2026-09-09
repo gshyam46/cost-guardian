@@ -8,7 +8,29 @@ const NAV = [
   { to: '/incidents', label: 'Incidents', icon: AlertTriangle },
 ];
 
-const GuardianLayout = ({ children }) => {
+/** Small "data is moving" affordance for the header.
+ *
+ * Worth the pixels because a dashboard that is quietly polling looks identical to one
+ * that has silently stopped -- and on an incident dashboard, "no incidents" and "not
+ * updating" must never look the same. */
+const LiveIndicator = ({ refreshing, lastUpdated }) => {
+  if (!lastUpdated) return null;
+  return (
+    <div className="flex items-center gap-2 text-xs text-slate-500" title="Auto-refreshing">
+      <span
+        className={`h-2 w-2 rounded-full ${
+          refreshing ? 'bg-emerald-500 animate-pulse' : 'bg-emerald-500'
+        }`}
+      />
+      <span>
+        Live &middot; updated{' '}
+        {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+      </span>
+    </div>
+  );
+};
+
+const GuardianLayout = ({ children, refreshing, lastUpdated }) => {
   const location = useLocation();
 
   const isActive = (item) =>
@@ -25,7 +47,8 @@ const GuardianLayout = ({ children }) => {
               <p className="text-xs text-slate-500">AI reliability &amp; incident intelligence</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
+            <LiveIndicator refreshing={refreshing} lastUpdated={lastUpdated} />
             {/* Guardian is standalone -- there is no "parent" app to go back to.
                 Disconnecting just clears the stored API key. */}
             <Button

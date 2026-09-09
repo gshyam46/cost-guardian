@@ -31,6 +31,13 @@ CORS_ORIGINS = os.environ.get("GUARDIAN_CORS_ORIGINS", "http://localhost:3001").
 # docs/PHASES.md, not forgotten.
 GUARDIAN_API_KEY = os.environ.get("GUARDIAN_API_KEY", "")
 
+# --- Worker -------------------------------------------------------------------
+# How often the worker asks Langfuse for new generations. 60s is the sane default for
+# a real deployment; a live demo wants it lower so the dashboard reacts while someone
+# is still watching it. Anything below ~10s mostly polls Langfuse's ingestion lag
+# rather than finding new data, so it is not worth going lower.
+POLL_INTERVAL_SECONDS = int(os.environ.get("GUARDIAN_POLL_INTERVAL_SECONDS", "60"))
+
 # --- Langfuse (the telemetry source Guardian reads) ----------------------------
 LANGFUSE_PUBLIC_KEY = os.environ.get("LANGFUSE_PUBLIC_KEY", "")
 LANGFUSE_SECRET_KEY = os.environ.get("LANGFUSE_SECRET_KEY", "")

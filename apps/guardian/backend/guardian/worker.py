@@ -9,6 +9,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import List
 
+from config import POLL_INTERVAL_SECONDS
 from db import db
 
 from .detectors import cost_anomaly, pii, reliability_anomaly
@@ -23,7 +24,6 @@ logger = logging.getLogger(__name__)
 
 DETECTORS = [cost_anomaly, reliability_anomaly, pii]
 
-POLL_INTERVAL_SECONDS = 60
 BASELINE_LOOKBACK = timedelta(hours=24)
 CURSOR_DOC_ID = "guardian_worker_cursor"
 
@@ -68,6 +68,15 @@ async def poll_once(source: LangfuseTraceSource) -> int:
     baseline = [m for m in window if m.timestamp < cursor]
 
     if not candidates:
+        # Say so explicitly. A worker that only logs when it finds something makes
+        # "nothing is happening in your system" and "the worker died" look identical
+        # in the log -- the same distinction the dashboard's live indicator exists to
+        # protect, and it matters more here because nobody is watching this process.
+        logger.info(
+            f"[Guardian] Poll cycle: no new generations since {cursor.isoformat()} "
+            f"({len(window)} in the {int(BASELINE_LOOKBACK.total_seconds() // 3600)}h "
+            f"baseline window)."
+        )
         await _save_cursor(now)
         return 0
 
@@ -94,6 +103,10 @@ async def run_forever() -> None:
             "[Guardian] Langfuse not configured - worker will idle every cycle. Set "
             "LANGFUSE_PUBLIC_KEY/LANGFUSE_SECRET_KEY in backend/.env."
         )
+
+    logger.info(
+        f"[Guardian] Worker started - polling Langfuse every {POLL_INTERVAL_SECONDS}s."
+    )
 
     while True:
         try:
