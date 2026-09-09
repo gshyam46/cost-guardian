@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "guardian-frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "apps/guardian/frontend", "start"],
+      "port": 3001
+    },
+    {
+      "name": "founder-frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "apps/founder-app/frontend", "start"],
+      "port": 3000
+    }
+  ]
+}

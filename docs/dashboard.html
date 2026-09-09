@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cost Guardian — Executive Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2f3a;
+    --text: #e6e9ef;
+    --muted: #9aa3b2;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --red: #f85149;
+    --accent: #58a6ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 -apple-system, Segoe UI, Helvetica, Arial, sans-serif;
+    padding: 24px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+    margin-bottom: 20px;
+  }
+  h1 { margin: 0; font-size: 22px; }
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 10px; }
+  .status-line { color: var(--muted); font-size: 14px; }
+  .badge { font-size: 20px; }
+  .progress-outer {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    height: 10px;
+    overflow: hidden;
+    margin: 8px 0 4px;
+  }
+  .progress-inner { height: 100%; background: var(--accent); }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+  ul.phases { list-style: none; padding: 0; margin: 0; }
+  ul.phases li {
+    display: flex;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--border);
+    font-size: 14px;
+  }
+  ul.phases li:last-child { border-bottom: none; }
+  .sym { width: 18px; text-align: center; flex-shrink: 0; }
+  .sym.done { color: var(--green); }
+  .sym.progress { color: var(--yellow); }
+  .sym.blocked { color: var(--red); }
+  .sym.todo { color: var(--muted); }
+  pre.diagram {
+    background: #0b0d11;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.4;
+    color: #c9d1d9;
+  }
+  table.metrics { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.metrics td { padding: 6px 4px; border-bottom: 1px solid var(--border); }
+  table.metrics td:last-child { text-align: right; font-variant-numeric: tabular-nums; color: var(--accent); }
+  .tbd { color: var(--muted); font-style: italic; }
+  .tasklist { padding-left: 20px; margin: 8px 0; }
+  .tasklist li { margin-bottom: 4px; }
+  .blocker { color: var(--red); }
+  .muted { color: var(--muted); }
+  code { background: #0b0d11; padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+  footer { color: var(--muted); font-size: 12px; margin-top: 24px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>Cost Guardian</h1>
+      <div class="status-line">AI reliability / incident intelligence layer for early-stage AI startups</div>
+    </div>
+    <div style="text-align:right">
+      <div><span class="badge">🟢</span> Current Phase: <strong>Phase 5 — Product Validation</strong></div>
+      <div class="status-line">Last updated: 2026-09-09 — MVP end-to-end flow VERIFIED against live Langfuse + Atlas</div>
+    </div>
+  </header>
+
+  <section>
+    <h2>Overall Progress (MVP, phases 0–5)</h2>
+    <div class="progress-outer"><div class="progress-inner" style="width:87%"></div></div>
+    <div class="status-line">~87% — weighting method and per-phase % in docs/PROGRESS.md. Phases 6–7 are post-MVP and not counted in this number.</div>
+  </section>
+
+  <div class="grid2">
+    <section>
+      <h2>Phases</h2>
+      <ul class="phases">
+        <li><span class="sym done">✓</span> Phase 0 — Repository stabilization <span class="muted">(100%)</span></li>
+        <li><span class="sym done">✓</span> Phase 1 — Real telemetry <span class="muted">(100% — verified live)</span></li>
+        <li><span class="sym done">✓</span> Phase 2 — Detection <span class="muted">(~90% — caught real failures on live data)</span></li>
+        <li><span class="sym done">✓</span> Phase 3 — API <span class="muted">(100% — verified against live Atlas)</span></li>
+        <li><span class="sym done">✓</span> Phase 4 — Dashboard <span class="muted">(95% — built + browser-verified vs mocked DB)</span></li>
+        <li><span class="sym progress">◐</span> Phase 5 — Validation <span class="muted">(~35% — real incidents in Atlas; 2nd app pending)</span></li>
+        <li><span class="sym todo">○</span> Phase 6 — Intelligence layer <span class="muted">(gated on Phase 5)</span></li>
+        <li><span class="sym todo">○</span> Phase 7 — Research <span class="muted">(question not locked yet)</span></li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Current Sprint</h2>
+      <p><strong>Objective:</strong> ✅ MVP flow verified end-to-end on live services. Now validating it on real, varied workload.</p>
+      <ol class="tasklist">
+        <li><s>Langfuse credentials + Atlas + working Groq key</s> — all resolved</li>
+        <li><s>Run <code>python -m scripts.verify_mvp</code> for real</s> — <strong>all 10 steps passed</strong></li>
+        <li>Run the pipeline repeatedly to build real per-agent baselines, then confirm the cost detector fires <em>organically</em> (not just on the synthetic candidate)</li>
+        <li>Re-verify the React dashboard against live Atlas data (so far only vs a mocked DB)</li>
+        <li>Add a second independent AI app — the "not hard-coded to Product A" proof</li>
+        <li>Measure false-positive rate on sustained normal traffic</li>
+      </ol>
+      <p><strong>Verified run:</strong> <code>run_id=8993f83a-766f-473c-bd82-f72ee79e59bb</code> → incident <code>672bb007-48a0-4eed-adae-184b76873dc3</code>, retrieved via <code>GET /api/guardian/incidents</code> (HTTP 200).</p>
+      <p><strong>No blockers.</strong> Known constraint: Groq free tier caps at 8k tokens/min vs ~10k per full run, so runs fall back across models mid-pipeline. Handled correctly by the fallback chain — and it's why the reliability detector had real failures to catch.</p>
+    </section>
+  </div>
+
+  <section>
+    <h2>Architecture</h2>
+    <pre class="diagram">
+                     Founder Niche Discovery
+                              │
+                              ▼
+                       Agent / LLM Calls
+                              │
+                              ▼
+                     LiteLLM  /  Langfuse
+                              │
+                              ▼
+                    ┌──────────────────┐
+                    │  Guardian Worker  │
+                    └────────┬─────────┘
+                              │
+                ┌─────────────┼─────────────┐
+                ▼             ▼             ▼
+          Cost Detector  Reliability    PII / Security
+                          Detector       Detector
+                │             │             │
+                └─────────────┼─────────────┘
+                              ▼
+                       Incident Engine
+                              │
+                              ▼
+                           MongoDB
+                              │
+                              ▼
+                        Guardian API
+                              │
+                              ▼
+                      React Dashboard
+                              │
+                              ▼
+                          Langfuse
+                    (raw trace / details)
+    </pre>
+    <div class="status-line">Full version with file references: docs/ARCHITECTURE.md</div>
+  </section>
+
+  <div class="grid2">
+    <section>
+      <h2>Product</h2>
+      <p><strong>Target:</strong> early-stage AI startups</p>
+      <p><strong>Problem:</strong> AI telemetry exists but small teams lack time to interpret it.</p>
+      <p><strong>Product:</strong> detection + correlation + incident intelligence above existing observability — not a replacement for Langfuse.</p>
+      <p><strong>MVP:</strong> telemetry → detection → incident → dashboard.</p>
+    </section>
+
+    <section>
+      <h2>Research</h2>
+      <p><strong>Status:</strong> Discovery</p>
+      <p><strong>Current research question:</strong> <span class="tbd">TBD until literature review</span></p>
+      <p><strong>Candidate directions:</strong></p>
+      <ul>
+        <li>Agentic incident diagnosis</li>
+        <li>AI-specific anomaly detection</li>
+        <li>Telemetry correlation (cost/latency/quality/context)</li>
+        <li>Runtime AI reliability signals</li>
+      </ul>
+    </section>
+  </div>
+
+  <section>
+    <h2>Key Metrics</h2>
+    <table class="metrics">
+      <tr><td>Backend tests passing</td><td>80 / 80</td></tr>
+      <tr><td>Real Langfuse integration verified</td><td>✓ end-to-end (2026-09-09)</td></tr>
+      <tr><td>Detectors implemented</td><td>3 (cost, reliability, PII)</td></tr>
+      <tr><td>Guardian dashboard pages</td><td>3 (Overview, Incidents, Incident detail) — browser-verified</td></tr>
+      <tr><td>Real incidents generated</td><td>5 in Atlas (incl. 2 caught autonomously)</td></tr>
+      <tr><td>Applications supported</td><td>1 (Founder Niche Discovery)</td></tr>
+      <tr><td>MVP completion</td><td>~87% (phases 0–5)</td></tr>
+      <tr><td>Research papers reviewed</td><td>0</td></tr>
+      <tr><td>Experiments completed</td><td>0</td></tr>
+    </table>
+  </section>
+
+  <footer>
+    Plain HTML/CSS, no build step, no external dependencies. Update by editing this file
+    directly alongside docs/PROGRESS.md — see the tracking rules at the top of that repo's
+    planning docs.
+  </footer>
+
+</div>
+</body>
+</html>

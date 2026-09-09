@@ -1,0 +1,17 @@
+# Cost Guardian service. Deliberately lean -- Guardian has no LLM SDKs of its own
+# because it never calls a model; it only reads telemetry and runs statistics.
+fastapi==0.110.1
+uvicorn==0.25.0
+starlette==0.37.2
+pydantic==2.12.4
+motor==3.3.1
+pymongo==4.5.0
+dnspython==2.8.0
+python-dotenv==1.2.1
+langfuse==2.53.9
+httpx==0.28.1
+
+# tests
+pytest==9.0.1
+anyio==4.11.0
+mongomock-motor==0.0.36
