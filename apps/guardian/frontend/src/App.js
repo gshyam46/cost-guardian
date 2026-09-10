@@ -2,6 +2,8 @@ import { useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import GuardianOverview from "@/pages/GuardianOverview";
+import GuardianLive from "@/pages/GuardianLive";
+import GuardianRunDetail from "@/pages/GuardianRunDetail";
 import GuardianIncidents from "@/pages/GuardianIncidents";
 import GuardianIncidentDetail from "@/pages/GuardianIncidentDetail";
 import ConnectScreen from "@/pages/ConnectScreen";
@@ -23,6 +25,8 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<GuardianOverview />} />
+        <Route path="/live" element={<GuardianLive />} />
+        <Route path="/runs/:traceId" element={<GuardianRunDetail />} />
         <Route path="/incidents" element={<GuardianIncidents />} />
         <Route path="/incidents/:incidentId" element={<GuardianIncidentDetail />} />
         <Route path="*" element={<Navigate to="/" replace />} />

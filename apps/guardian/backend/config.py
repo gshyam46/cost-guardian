@@ -34,8 +34,12 @@ GUARDIAN_API_KEY = os.environ.get("GUARDIAN_API_KEY", "")
 # --- Worker -------------------------------------------------------------------
 # How often the worker asks Langfuse for new generations. 60s is the sane default for
 # a real deployment; a live demo wants it lower so the dashboard reacts while someone
-# is still watching it. Anything below ~10s mostly polls Langfuse's ingestion lag
-# rather than finding new data, so it is not worth going lower.
+# is still watching it.
+#
+# There is a hard floor, though, and it is not ingestion lag: Langfuse Cloud allows 15
+# API requests/minute for the entire project, and the dashboard's live views draw on
+# the same allowance. A worker polling every 15s can spend half that budget on its own
+# and push the dashboard into 429s. 30s is the lowest value that leaves room for both.
 POLL_INTERVAL_SECONDS = int(os.environ.get("GUARDIAN_POLL_INTERVAL_SECONDS", "60"))
 
 # --- Langfuse (the telemetry source Guardian reads) ----------------------------

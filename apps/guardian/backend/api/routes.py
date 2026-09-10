@@ -19,6 +19,7 @@ from guardian.incident import Incident
 from guardian.langfuse_client import LangfuseTraceSource
 from guardian.metrics import MongoMetricsStore
 from guardian.store import MongoIncidentStore
+from guardian.traces import LiveTraceReader
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/guardian", tags=["guardian"])
@@ -27,6 +28,10 @@ router = APIRouter(prefix="/guardian", tags=["guardian"])
 # api/analysis.py. Safe to construct with no credentials -- degrades to trace_url()
 # always returning None rather than raising.
 _trace_source = LangfuseTraceSource()
+
+# Read-only Langfuse views (runs, calls, live stats). Nothing here touches Guardian's
+# database -- see guardian/traces.py for why these are read through, not stored.
+_live = LiveTraceReader(_trace_source)
 
 
 class IncidentOut(Incident):
@@ -155,3 +160,35 @@ async def get_metrics(request: Request, hours: int = 48):
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
     rollups = await MongoMetricsStore(db).since(since)
     return [MetricPoint(**rollup) for rollup in rollups]
+
+
+# --- Live views ---------------------------------------------------------------
+#
+# The docstring on get_metrics above says Guardian "does not serve raw traces". These
+# endpoints do not contradict it: they persist nothing and own nothing. Langfuse stays
+# the system of record; Guardian just stops making the user leave the dashboard to see
+# whether their app is currently doing anything.
+#
+# One endpoint, not one per widget. Langfuse Cloud allows 15 requests/minute for the
+# whole project and the worker draws on the same budget, so a dashboard that fanned out
+# to three endpoints on every refresh rate-limited itself within a minute -- and, worse,
+# rendered the resulting empty responses as "your app made no calls".
+
+
+@router.get("/live")
+async def get_live(request: Request, hours: int = 24, runs: int = 8, calls: int = 60):
+    """Stats, recent runs and the call feed for the last `hours`, in one response."""
+    require_api_key(request)
+    return _live.snapshot(hours=hours, run_limit=runs, call_limit=calls)
+
+
+@router.get("/live/runs/{trace_id}")
+async def get_live_run(trace_id: str, request: Request):
+    """One run and every call beneath it, oldest first."""
+    require_api_key(request)
+    if not _live.available:
+        raise HTTPException(status_code=503, detail="Langfuse is not configured.")
+    run = _live.run_detail(trace_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found in Langfuse.")
+    return run

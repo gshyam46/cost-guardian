@@ -29,6 +29,12 @@ export const guardianApi = {
   resolveIncident: (id) => api.post(`/guardian/incidents/${id}/resolve`),
   getTrends: (days = 14) => api.get('/guardian/trends', { params: { days } }),
   getMetrics: (hours = 48) => api.get('/guardian/metrics', { params: { hours } }),
+
+  // Live views. These read through to Langfuse on every request and cache nothing --
+  // Guardian stores incidents and rollups, never raw calls (see guardian/traces.py).
+  getLive: (hours = 24, runs = 8, calls = 60) =>
+    api.get('/guardian/live', { params: { hours, runs, calls } }),
+  getLiveRun: (traceId) => api.get(`/guardian/live/runs/${traceId}`),
 };
 
 export default guardianApi;

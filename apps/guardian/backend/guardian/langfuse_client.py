@@ -163,6 +163,13 @@ class LangfuseTraceSource:
     def available(self) -> bool:
         return self._client is not None
 
+    @property
+    def client(self):
+        """The underlying Langfuse client, for read models that need endpoints this
+        class does not wrap (see traces.py). Callers must check `available` first --
+        this is None when credentials are missing."""
+        return self._client
+
     def fetch_recent_generations(
         self, since: datetime, limit: int = 200
     ) -> List[TraceMetric]:

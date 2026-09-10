@@ -1,10 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
 import { clearApiKey } from '@/services/guardianApi';
 import { Button } from '@/components/ui/button';
-import { ShieldAlert, LayoutDashboard, AlertTriangle, LogOut } from 'lucide-react';
+import { ShieldAlert, LayoutDashboard, AlertTriangle, LogOut, Activity } from 'lucide-react';
 
 const NAV = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, exact: true },
+  { to: '/live', label: 'Live activity', icon: Activity },
   { to: '/incidents', label: 'Incidents', icon: AlertTriangle },
 ];
 
