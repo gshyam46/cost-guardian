@@ -24,6 +24,7 @@ def _trace(trace_id, cost=0.01, latency=800.0, tokens=500, status="success",
            agent="profile_analyst", at=None):
     return TraceMetric(
         trace_id=trace_id,
+        observation_id=trace_id,
         agent_name=agent,
         model="groq/llama-3.3-70b-versatile",
         cost_usd=cost,
@@ -45,13 +46,14 @@ def test_hour_bucket_assumes_utc_for_naive_timestamps():
 
 
 def test_to_public_dict_computes_average_latency():
-    doc = {"hour": "h", "agent_name": "a", "call_count": 4, "sum_latency_ms": 4000.0}
+    doc = {"hour": "h", "agent_name": "a", "call_count": 4, "sum_latency_ms": 4000.0,
+           "latency_known_count": 4, "latency_unknown_count": 0}
     assert to_public_dict(doc)["avg_latency_ms"] == 1000.0
 
 
 def test_to_public_dict_handles_zero_calls_without_dividing_by_zero():
     doc = {"hour": "h", "agent_name": "a", "call_count": 0, "sum_latency_ms": 0.0}
-    assert to_public_dict(doc)["avg_latency_ms"] == 0.0
+    assert to_public_dict(doc)["avg_latency_ms"] is None
 
 
 async def test_record_aggregates_calls_in_the_same_hour(mock_db):

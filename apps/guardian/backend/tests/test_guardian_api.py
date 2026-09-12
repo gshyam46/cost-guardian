@@ -1,4 +1,4 @@
-"""Guardian API endpoints exercised over real HTTP (FastAPI TestClient) against a
+"""Guardian API endpoints exercised in-process (FastAPI TestClient) against a
 mocked Mongo backend (mongomock-motor). Real routing, real auth, real
 request/response serialization -- only the database underneath is a fake.
 

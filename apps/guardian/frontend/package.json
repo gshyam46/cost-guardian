@@ -2,6 +2,8 @@
   "name": "guardian-frontend",
   "version": "0.1.0",
   "private": true,
+  "engines": { "node": "24.x", "npm": "11.x" },
+  "packageManager": "npm@11.19.0",
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
     "axios": "^1.8.4",

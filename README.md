@@ -1,104 +1,163 @@
 # Cost Guardian
 
-Cost, reliability, and security guardrails for LLM applications — built on top of
-[Langfuse](https://langfuse.com) rather than reimplementing trace storage and a trace
-explorer.
+Cost Guardian is an early product for understanding cost and reliability problems in AI workflows. It can read an existing Langfuse project or accept numeric terminal-call events directly from an application, apply deterministic detectors and display incidents, metrics and live activity.
 
-Langfuse captures traces, tokens, and per-call cost for any LLM app. Cost Guardian
-reads that data and adds the part Langfuse doesn't:
+**Status: engineering prototype, not production-ready.** The 2026-09-11 review found data-correctness and customer-journey gaps. The next objective is an assisted private beta after the documented gates pass. Historical demo success is not a current release guarantee.
 
-- **Cost anomaly detection** — flags agents whose spend breaks from their own rolling
-  baseline
-- **Reliability anomaly detection** — call failures and latency regressions
-- **PII leak detection** — scans model output for emails, phone numbers, SSNs, cards, IPs
-- **Incidents, not metrics** — threshold breaches become deduplicated incidents with
-  severity and evidence, each linking back to the exact Langfuse trace
+R0 verification infrastructure, the R1 source migration, a bounded durable ledger and incident summary repairs are implemented locally. Guardian defaults to direct HTTPX Langfuse Observations v2 reads. The worker resumes durable pages, deduplicates replay, captures late arrivals within a 24-hour horizon and rebuilds affected rollups. Incident summaries now aggregate all matching records and include today in UTC; live views expose partial, stale and unknown measurements. R1 remains in progress: cutover/recovery, real source compatibility and operating limits still need evidence. The full customer journey is unfinished. See [INGESTION.md](docs/INGESTION.md), [SUMMARIES.md](docs/SUMMARIES.md) and current checks in [VALIDATION.md](docs/VALIDATION.md).
 
-This is not a Langfuse replacement. Guardian never stores raw traces; it stores
-incidents and hourly rollups, and deep-links out for the detail.
+AI SaaS, RAG and agent teams **without existing telemetry or a Langfuse account** now have a bounded native JSON intake path. In an operator-configured OIDC deployment, an owner creates a scoped write-only key and adds the [Python or JavaScript export recipe](examples/native-capture/README.md). This captures completed call metrics without prompts or responses. Automatic instrumentation, managed provisioning and the complete RAG/workflow journey remain unfinished. [CAPTURE.md](docs/CAPTURE.md) defines the implemented contract.
 
-## Two separate applications
+Bounded per-process Python/Node background exporters and explicit call/stream lifecycle helpers are implemented under [EXPORTING.md](docs/EXPORTING.md). Local admission keeps telemetry HTTP waits outside the model response path, and queue limits, retries, unconfirmed work and shutdown are visible. These source modules require no provider SDK dependency; they do not supply a durable spool, serverless delivery guarantee or automatic RAG instrumentation. Follow the [integration examples](examples/native-capture/README.md) and current [validation record](docs/VALIDATION.md).
 
-```
-cost-guardian/
-├── apps/
-│   ├── founder-app/          Product A — a real 5-agent LLM app, used as the
-│   │   ├── backend/   :8000  monitored workload. Knows nothing about Guardian.
-│   │   └── frontend/  :3000
-│   └── guardian/             Cost Guardian — the product
-│       ├── backend/   :8001  API + worker, own config/db/auth
-│       └── frontend/  :3001  Dashboard, API-key auth
-├── tools/                    Cross-app integration harness
-└── docs/
-```
+Setup now leads with Python/Node OpenAI recipes for Responses and Chat Completions, including streaming. Add the [provider helper](docs/PROVIDERS.md) around the application's existing SDK call to capture validated token usage, duration and status without constructing events manually. Python supports sync and async clients. Missing usage stays unknown; no price is inferred from tokens. Local checks use real SDKs against synthetic localhost responses, not paid provider calls.
 
-They share **nothing but Langfuse**. The monitored app emits telemetry to Langfuse;
-Guardian polls Langfuse. That's the whole coupling — which is what makes Guardian
-point-at-any-project rather than bolt-into-one-app.
+The direct/OIDC path now has an [isolated deployment package and operator guide](deploy/guardian/README.md): one image contains the UI/API, separate processes run ingestion and optional delivery, and explicit bootstrap initializes a compatible database before login. The API serves same-origin static assets and a bounded `/api/ready` endpoint. Operators still supply a TLS Mongo replica set, registered OIDC client and HTTPS ingress. [Deployment evidence](docs/VALIDATION.md) separates native local acceptance from image-build and deployed customer proof; managed provisioning and the release gates remain open.
 
-## Running it
+The R2 named-access foundation supports opt-in OIDC login, opaque server-side sessions and owner/operator/viewer roles for one isolated project. Membership comes from operator configuration; incident resolution and ingestion-key changes record the named actor atomically. Owners can create and revoke direct-ingestion keys; operators/viewers see redacted status. The existing shared-key mode remains available for local Langfuse development. Access, test receipt, real receipt and completed analysis are separate states. This does not create projects or provide managed instrumentation. [IDENTITY.md](docs/IDENTITY.md) and [ACCESS.md](docs/ACCESS.md) define access; current verification is recorded in [VALIDATION.md](docs/VALIDATION.md).
 
-Each app is independent. You can run Guardian without the founder app at all.
+## Start with the review
 
-### Guardian (the product)
+- [Executive assessment](docs/EXECUTIVE.md): verdict and priorities.
+- [Product and engineering review](docs/REVIEW.md): concrete findings and customer impact.
+- [Product direction](docs/PRODUCT.md) and [onboarding](docs/ONBOARDING.md): who it serves and the complete journey.
+- [Architecture](docs/ARCHITECTURE.md) and [decisions](docs/DECISIONS.md): current vs target design.
+- [Implementation plan](docs/PLAN.md) and [phase status](docs/PHASES.md): dependency-ordered work.
+- [Launch gates](docs/LAUNCH.md), [progress](docs/PROGRESS.md) and [validation](docs/VALIDATION.md): evidence required and available.
 
-```bash
-cd apps/guardian/backend
-pip install -r requirements.txt
-cp .env.example .env        # set MONGO_URL, GUARDIAN_API_KEY, LANGFUSE_* keys
-uvicorn server:app --reload --port 8001
+## Repository
+
+```text
+apps/
+  founder-app/             Independent monitored demo, not required by Guardian
+    backend/               FastAPI :8000
+    frontend/              React :3000
+  guardian/                The product
+    backend/               FastAPI :8001; separate polling worker
+    frontend/              React :3001
+tools/                     Isolated offline/live verification harness and tests
+deploy/guardian/           Direct/OIDC image, Compose roles and operator guide
+docs/                      Active review, architecture, plan and evidence
+docs/archive/2026-09-09/    Historical planning/status snapshots
 ```
 
-The worker is a separate process — it polls Langfuse and raises incidents:
+Services are independent and communicate through telemetry. Guardian pins one capture mode/database/project per deployment: `langfuse` by default, or explicit `direct` with OIDC. It stores numeric observation records, safe PII category findings, work/ingestion state, incidents and derived rollups. OIDC adds hashed sessions, short-lived login state, fixed binding and redacted audit; direct capture adds hashed write-only credentials, receipts and a numeric inbox. Direct views contain no raw content or vendor links. Langfuse live views still process output and serve previews through an in-memory cache, so privacy work remains for that mode. Shared multi-tenant hosting is not implemented.
 
-```bash
-cd apps/guardian/backend
-python -m guardian.worker
+## Current local developer setup
+
+Use Python 3.13 and Node 24/npm 11 for the locally verified baseline. Each backend has its own virtual environment and resolved-version constraints; each frontend uses its tracked npm lockfile. Real ingestion requires a MongoDB replica set supporting transactions. Langfuse mode also requires an instrumented Langfuse project; direct mode requires OIDC and application code sending the supported numeric events. The worker has no production nontransactional fallback. Offline tests and the synthetic HTTP smoke need neither service nor provider credentials; dedicated real-database tests have separate setup in [tools/README.md](tools/README.md).
+
+The Guardian database user also needs index-creation permission on `guardian_incidents`: the first summary request after process startup initializes its indexes, then caches successful setup. Failure is reported as unavailable data. See the index contract and operating limits in [SUMMARIES.md](docs/SUMMARIES.md).
+
+OIDC mode also requires transaction-capable Mongo for session rotation and incident resolution, plus TTL-index creation on the authentication collections. Configure a maintained identity provider, a fixed HTTPS frontend/API origin and the named-member allowlist before enabling `GUARDIAN_AUTH_MODE=oidc`. Register the exact `/api/guardian/auth/callback` URL. The database pins organization/project/environment/connection/issuer/client identity and rejects a mismatched deployment; caller project fields cannot reassign it. Full configuration and the explicit loopback-only development exception are in [IDENTITY.md](docs/IDENTITY.md) and the backend environment template. Actual provider registration and deployed TLS callback operation remain unverified.
+
+The default `LANGFUSE_READ_API=v2` uses `GET /api/public/v2/observations` through HTTPX and does not construct an exporter SDK. Set `LANGFUSE_READ_API=v1` explicitly only for a supported self-hosted v3 source or temporary Cloud rollback; that path retains SDK 2.53.9. There is no automatic fallback. Cloud removes legacy reads on **2026-11-16**, and self-hosted v4 omits them. Actual server/exporter compatibility remains a pre-beta verification requirement; the local mock contract does not establish it. [Migration contract and primary sources](docs/SOURCE_MIGRATION.md).
+
+PowerShell, starting at the repository root:
+
+```powershell
+Set-Location apps/guardian/backend
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt -c requirements.constraints.txt
+Copy-Item .env.example .env
 ```
 
-Dashboard:
+For the default `GUARDIAN_AUTH_MODE=api_key` local path, fill `MONGO_URL`, `GUARDIAN_DB_NAME`, `GUARDIAN_API_KEY`, `LANGFUSE_HOST`, `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` locally. OIDC mode uses its separate settings and never accepts the shared key as a fallback. Keep `LANGFUSE_READ_API=v2` unless deliberately selecting the legacy source path. Keep `GUARDIAN_CONNECTION_ID` (default `primary`) stable when rotating source keys; changing upstream projects requires a new connection. Use the same source mode/connection in API and worker processes, a development source/database, and keep real credentials out of version control. Existing incremental rollups require an explicit cutover; the new writer refuses to silently mix or overwrite them. See [ingestion deployment boundaries](docs/INGESTION.md).
 
-```bash
-cd apps/guardian/frontend
-npm install
-npm start                    # :3001, asks for GUARDIAN_API_KEY on first load
+Start the API:
+
+For optional Slack incident delivery in OIDC mode, set `GUARDIAN_SLACK_WEBHOOK_URL` identically in the API and both workers. The URL is a deployment secret. Follow [notification setup and delivery semantics](docs/NOTIFICATIONS.md); the owner must test and enable the destination before new incidents are queued.
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn server:app --reload --port 8001
 ```
 
-### Founder app (the monitored workload)
+In another terminal, from `apps/guardian/backend`, start the worker:
 
-```bash
-cd apps/founder-app/backend
-pip install -r requirements.txt
-cp .env.example .env         # MONGO_URL + an LLM provider key + LANGFUSE_* keys
-uvicorn server:app --reload --port 8000
+```powershell
+.\.venv\Scripts\python.exe -m guardian.worker
 ```
 
-```bash
-cd apps/founder-app/frontend
-npm install && npm start     # :3000
+If using Slack delivery, start its separate process from `apps/guardian/backend`:
+
+```powershell
+.\.venv\Scripts\python.exe -m notifications.worker
 ```
 
-## Verifying the whole flow
+In **Setup → Notifications**, select **Send test**, refresh until Slack acceptance appears, then enable incident delivery. Setup shows worker health and recent delivery results; each incident has its own history. Queueing a test does not prove acceptance, and an unconfirmed retry can send another copy. The [direct/OIDC package](deploy/guardian/README.md) supplies a notification-worker override; actual image execution and deployed Slack acceptance remain launch checks.
 
-```bash
-python tools/verify_mvp.py
+In another terminal, from the repository root:
+
+```powershell
+Set-Location apps/guardian/frontend
+Copy-Item .env.example .env
+npm.cmd ci
+npm.cmd start
 ```
 
-Runs the real pipeline, confirms the Langfuse trace is correctly grouped, runs the
-Guardian worker over it, triggers a controlled anomaly, and confirms the resulting
-incident is retrievable through the Guardian API — printing a pass/fail line per step.
+Copying the frontend environment template sets `PORT=3001` and `REACT_APP_GUARDIAN_URL=http://localhost:8001`. In local shared-key mode, open the dashboard and supply the development Guardian API key. The browser verifies it before saving and restores the requested page after access succeeds. A rejected key requires reconnection; temporary access-service failure offers retry without silently discarding a stored key. In OIDC mode the browser uses the sign-in flow and server cookie, keeps actor/project/CSRF in memory, and does not read or send a saved legacy key. This remains operator setup; managed onboarding is unfinished.
 
-To build real detector baselines (detectors need ≥5 samples per agent before they
-evaluate anything):
+Open **Setup** to inspect source configuration and processing work. Direct setup lets owners create/revoke ingestion keys and separates test handshakes, real received events and worker progress; the full key is displayed only after creation and must be copied before dismissal. In **Monitoring rules**, named owners can save per-call USD and duration limits and choose whether reported errors create incidents. Known values above a configured limit can trigger from the first call; missing prices remain unknown. Open an incident to compare its measurement with the saved rule, inspect its captured run and mark it resolved. [Monitoring rules and change behavior](docs/POLICIES.md).
 
-```bash
-python tools/build_baseline.py 6
+Configuration or a test receipt does not establish real monitoring. Langfuse source setup remains diagnostic. In local key mode, monitoring rules are read-only and Disconnect clears browser access while the server key remains active. OIDC logout revokes the application session and reports failure with retry; it does not revoke project ingestion keys, stop collection or sign out of the identity provider globally.
+
+For the no-Langfuse path, configure `GUARDIAN_AUTH_MODE=oidc` and `GUARDIAN_CAPTURE_MODE=direct` consistently in API and worker processes, using a fresh isolated database and the fixed identity settings above. See [direct capture setup](docs/CAPTURE.md) and [export recipes](examples/native-capture/README.md). Existing Langfuse data or an incompatible capture binding blocks mode switching; there is no automatic migration or reset. Run the same worker command in either mode.
+
+`GET /api/health` is liveness only. Packaged direct/OIDC deployments use `GET /api/ready` for initialized configuration/database readiness; it remains unavailable in other modes and does not certify worker activity. `GET /api/guardian/auth/config` identifies the configured auth mode without secrets. `GET /api/guardian/access` is independent of summaries and source reads. In local key mode it validates the header/Bearer credential without database/index work; in OIDC mode it checks the Mongo session, fixed scope and current configured membership. A database outage makes named access unavailable, with no key fallback. Guardian API responses are noncacheable; packaged hashed UI assets have immutable caching. Successful access does not establish monitoring readiness.
+
+Authenticated `GET /api/guardian/monitoring` reports the worker's last attempt, successful checkpoint, read status and reason. A stale or blocked worker needs attention even when the API responds. Keep the polling default at 60 seconds for development unless intentionally testing source limits; source quotas depend on endpoint/plan/organization. The existing template's faster-demo suggestion is not a production capacity recommendation.
+
+## Optional Founder workload
+
+From `apps/founder-app/backend`, create its own virtual environment, install with `-r requirements.txt -c requirements.constraints.txt`, copy `.env.example` and configure a development Mongo database, provider credentials and Langfuse. Run:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn server:app --reload --port 8000
 ```
 
-## Status
+Keep its environment/imports separate from Guardian. Configure a distinct Founder `DB_NAME`; Guardian reads `GUARDIAN_DB_NAME`. Founder still exports through SDK2 and has not migrated to modern ingestion. Older ingestion can take up to 15 minutes to appear in v2, so a short verification timeout cannot establish source availability. The Founder browser flow also depends on its external Emergent authentication integration and has not been validated here. See [source availability](docs/SOURCE_MIGRATION.md) and its [frontend README](apps/founder-app/frontend/README.md).
 
-MVP flow verified end-to-end against live Langfuse + MongoDB Atlas. Detectors fire
-organically on real telemetry, not just planted data. See [docs/EXECUTIVE.md](docs/EXECUTIVE.md)
-for a 60-second status read, [docs/PHASES.md](docs/PHASES.md) for the detailed
-checklist, and [docs/DECISIONS.md](docs/DECISIONS.md) for why things are built the way
-they are.
+## Verification
+
+Backend suite, from `apps/guardian/backend` with dependencies installed:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/ -q -rx
+```
+
+Harness isolation tests and actual localhost HTTP smoke, from the repository root:
+
+```powershell
+.\apps\guardian\backend\.venv\Scripts\python.exe -m unittest discover -s tools/tests -v
+.\apps\guardian\backend\.venv\Scripts\python.exe tools/verify_mvp.py offline --guardian-python .\apps\guardian\backend\.venv\Scripts\python.exe --report tools/reports/offline.json
+```
+
+Frontend tests and production build, from each app's `frontend` directory:
+
+```powershell
+$env:CI = "true"
+npm.cmd test -- --watchAll=false --runInBand
+npm.cmd run build
+```
+
+The repaired harness isolates applications in subprocesses and checks the real `X-Guardian-Key` HTTP contract. No arguments print help. `offline` uses synthetic source events and mocked Mongo; `live --allow-live` requires explicit, dedicated test configuration and can incur provider charges. Setup, boundaries and error codes are in [tools/README.md](tools/README.md).
+
+[Ordinary CI](.github/workflows/ci.yml) runs backend/harness tests, the offline HTTP smoke and both frontend tests/builds without application secrets. The separate [manual live workflow](.github/workflows/live-verification.yml) needs environment setup described in [the CI guide](.github/README.md). Local results and remaining verification are in [VALIDATION.md](docs/VALIDATION.md); a hosted workflow run has not yet been observed.
+
+## Current limitations
+
+Direct intake accepts at most 100 events/256 KiB per batch, with explicit terminal timestamps, stable IDs and optional numeric measurements. A 202 response confirms a durable receipt; processing may still be pending. Test-mode batches never enter production totals or detectors. The worker handles at most 500 inbox records per cycle in transactions of 100; direct live/run views remain bounded to 1,000 records. Per-key/project admission quotas and a 10,000-record pending limit reject excess work explicitly. These are safety limits, not measured production capacity. Receipts, inbox history, credentials and audits currently remain retained; retention/offboarding is unfinished.
+
+The v2 worker reads up to five 100-row pages per poll and resumes the same fixed query on the next poll. Each page persists accepted/quarantined dispositions atomically; only an exhausted traversal advances the source watermark. Every new traversal rereads 24 hours, and initial import accounts for all captured history in that window. A checkpoint older than the supported horizon blocks for an explicit backfill decision. Legacy v1 retains a complete-read-only 500-row limit.
+
+Detector processing waits for source-window exhaustion; bounded work can accumulate. More than 10,000 observations in one hour/agent rebuild or 5,000 earlier observations in a detector baseline leaves work pending with degraded health. Live reads remain capped at 1,000 observations. V2 source calls use fixed 100-row pages, a 15-second read budget, five-second network timeouts and an 8 MiB response limit per page. The hourly metrics endpoint returns HTTP 422 when more than 5,000 buckets match. These are visible limits, not tested production capacity.
+
+Incident summaries use one authenticated `/api/guardian/summary` response with UTC calendar days including today, explicit query bounds and invalid-timestamp coverage. The former 1,000-open/10,000-trend caps are removed. Legacy timestamps are interpreted in Mongo without rewriting history; invalid or timezone-naive dates make coverage partial. Query failures/timeouts return 503, and incident lists show failed reads and retry separately from successful empty results. Exact aggregates still inspect matching data, with a two-second server execution budget; legacy conversion, query/index deployment and production load remain operating limits. [Summary contract](docs/SUMMARIES.md).
+
+Live/run views use observations only. Run lookup accepts 1–168 hours, defaulting to 168; an empty successful lookup returns HTTP 200 with `not_observed` in that window, not a claim that the trace does not exist. Without usable cached data, source failure returns 503 for run lookup or a 200 live snapshot with degraded coverage and null statistics. Cached fallback is labelled stale. Child calls do not establish workflow success or duration; conflicting trace context stays unknown.
+
+All seven original regression assertions now pass: source failure preserves the checkpoint, legacy usage fallback works, a 250-row live window includes later pages, late arrivals inside the tested horizon count once, replay preserves totals, distinct-agent evidence survives, and material spend after a known free baseline is detected. Unknown prices never become a free baseline. Saved policies are pinned at first evaluation; changes do not rescore finished history or reopen resolved incidents. Conflicting observation copies remain quarantined with unknown measurements. Ledger-derived totals describe captured observations, not invoice reconciliation or unlimited history.
+
+Notifications, managed onboarding, membership administration, shared-tenant isolation and retention/offboarding are not implemented. Named sessions and scoped direct-ingestion keys have local protocol/API/database evidence, including audit rollback, replay, quota and revocation races. Actual loopback HTTP intake also reaches worker totals and an incident without constructing a Langfuse client. Real identity-provider registration, deployed TLS and the full account lifecycle remain release gates. Cost alerts are advisory and do not enforce a budget. Regex PII matches are experimental, not proof of a leak. Browser checks use synthetic API responses; localhost database checks have separate evidence boundaries. Real source services, hosted CI, production recovery and the complete customer journey remain unverified in [VALIDATION.md](docs/VALIDATION.md).
+
+Next work completes R1-02 cutover/recovery and load/retention validation, R1-03 query/index and operating validation, and R1-01 modern exporter migration with real source compatibility evidence. R0 credential closure and provisioning/discovery remain open. Each implementation change updates its docs and verification evidence.

@@ -10,6 +10,9 @@ dnspython==2.8.0
 python-dotenv==1.2.1
 langfuse==2.53.9
 httpx==0.28.1
+Authlib==1.8.0
+# Authlib 1.8's OAuth client uses a separate HTTPX2 transport.
+httpx2==2.12.0
 
 # tests
 pytest==9.0.1

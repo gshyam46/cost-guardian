@@ -1,30 +1,27 @@
 import { Link, useLocation } from 'react-router-dom';
-import { clearApiKey } from '@/services/guardianApi';
+import { useGuardianAccess } from '@/contexts/GuardianAccess';
 import { Button } from '@/components/ui/button';
-import { ShieldAlert, LayoutDashboard, AlertTriangle, LogOut, Activity } from 'lucide-react';
+import { ShieldAlert, LayoutDashboard, AlertTriangle, LogOut, Activity, Settings } from 'lucide-react';
 
 const NAV = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, exact: true },
   { to: '/live', label: 'Live activity', icon: Activity },
   { to: '/incidents', label: 'Incidents', icon: AlertTriangle },
+  { to: '/setup', label: 'Setup', icon: Settings },
 ];
 
-/** Small "data is moving" affordance for the header.
- *
- * Worth the pixels because a dashboard that is quietly polling looks identical to one
- * that has silently stopped -- and on an incident dashboard, "no incidents" and "not
- * updating" must never look the same. */
-const LiveIndicator = ({ refreshing, lastUpdated }) => {
+/** Receipt of an API response is distinct from source freshness or worker health. */
+const ApiCheckIndicator = ({ refreshing, lastUpdated }) => {
   if (!lastUpdated) return null;
   return (
-    <div className="flex items-center gap-2 text-xs text-slate-500" title="Auto-refreshing">
+    <div className="flex items-center gap-2 whitespace-nowrap text-xs text-slate-500" title="Last dashboard API response; source freshness is shown with the data">
       <span
-        className={`h-2 w-2 rounded-full ${
-          refreshing ? 'bg-emerald-500 animate-pulse' : 'bg-emerald-500'
+        className={`h-2 w-2 shrink-0 rounded-full ${
+          refreshing ? 'bg-slate-400 animate-pulse' : 'bg-slate-400'
         }`}
       />
       <span>
-        Live &middot; updated{' '}
+        API checked &middot;{' '}
         {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
       </span>
     </div>
@@ -33,6 +30,7 @@ const LiveIndicator = ({ refreshing, lastUpdated }) => {
 
 const GuardianLayout = ({ children, refreshing, lastUpdated }) => {
   const location = useLocation();
+  const access = useGuardianAccess();
 
   const isActive = (item) =>
     item.exact ? location.pathname === item.to : location.pathname.startsWith(item.to);
@@ -40,32 +38,33 @@ const GuardianLayout = ({ children, refreshing, lastUpdated }) => {
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b bg-white">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <ShieldAlert className="h-6 w-6 text-slate-900" />
+        <div className="max-w-6xl mx-auto px-6 py-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="min-w-0 flex flex-1 items-center gap-3">
+            <ShieldAlert className="h-6 w-6 shrink-0 text-slate-900" />
             <div>
               <h1 className="text-lg font-semibold text-slate-900 leading-tight">Cost Guardian</h1>
               <p className="text-xs text-slate-500">AI reliability &amp; incident intelligence</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <LiveIndicator refreshing={refreshing} lastUpdated={lastUpdated} />
-            {/* Guardian is standalone -- there is no "parent" app to go back to.
-                Disconnecting just clears the stored API key. */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                clearApiKey();
-                window.location.reload();
-              }}
-            >
-              <LogOut className="h-4 w-4 mr-1" />
-              Disconnect
-            </Button>
-          </div>
+          {lastUpdated && <div className="order-3 w-full sm:order-none sm:w-auto">
+            <ApiCheckIndicator refreshing={refreshing} lastUpdated={lastUpdated} />
+          </div>}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="shrink-0"
+            onClick={access.disconnect}
+            title={access.auth_mode === 'oidc' ? 'Sign out of this Guardian session. Monitoring continues.' : 'Disconnect this browser. Monitoring continues; the server key is not revoked.'}
+          >
+            <LogOut className="h-4 w-4 mr-1" />
+            {access.auth_mode === 'oidc' ? 'Sign out' : 'Disconnect'}
+          </Button>
         </div>
-        <nav className="max-w-6xl mx-auto px-6 flex gap-1">
+        {access.auth_mode === 'oidc' && <div className="max-w-6xl mx-auto px-6 pb-3 text-xs text-slate-600 break-words">
+          <p>{access.actor.name} · {access.actor.role}</p>
+          <p>{access.project.name} · {access.project.environment} · Organization: {access.project.organization_id}</p>
+        </div>}
+        <nav className="max-w-6xl mx-auto px-6 flex flex-wrap gap-1" aria-label="Guardian">
           {NAV.map((item) => {
             const Icon = item.icon;
             return (

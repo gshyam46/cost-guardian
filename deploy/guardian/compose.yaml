@@ -1,0 +1,81 @@
+name: cost-guardian
+
+x-environment: &environment
+  PYTHON_DOTENV_DISABLED: "1"
+  MONGO_URL_FILE: /run/secrets/mongo_url
+  GUARDIAN_DB_NAME: ${GUARDIAN_DB_NAME:?Set an explicit isolated database name}
+  GUARDIAN_AUTH_MODE: oidc
+  GUARDIAN_CAPTURE_MODE: direct
+  GUARDIAN_OIDC_ISSUER: ${GUARDIAN_OIDC_ISSUER:?Set the registered HTTPS issuer}
+  GUARDIAN_OIDC_CLIENT_ID: ${GUARDIAN_OIDC_CLIENT_ID:?Set the registered client ID}
+  GUARDIAN_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret
+  GUARDIAN_OIDC_MEMBERS_JSON_FILE: /run/secrets/oidc_members
+  GUARDIAN_PUBLIC_URL: ${GUARDIAN_PUBLIC_URL:?Set the public HTTPS origin}
+  GUARDIAN_UI_ORIGIN: ${GUARDIAN_PUBLIC_URL:?Set the public HTTPS origin}
+  GUARDIAN_ORGANIZATION_ID: ${GUARDIAN_ORGANIZATION_ID:?Set the isolated organization ID}
+  GUARDIAN_PROJECT_ID: ${GUARDIAN_PROJECT_ID:?Set the isolated project ID}
+  GUARDIAN_ENVIRONMENT: ${GUARDIAN_ENVIRONMENT:?Set the environment}
+  GUARDIAN_PROJECT_NAME: ${GUARDIAN_PROJECT_NAME:?Set the project display name}
+  GUARDIAN_CONNECTION_ID: ${GUARDIAN_CONNECTION_ID:?Set the stable connection ID}
+  GUARDIAN_POLL_INTERVAL_SECONDS: ${GUARDIAN_POLL_INTERVAL_SECONDS:-10}
+  GUARDIAN_STATIC_DIR: /opt/guardian/ui
+  GUARDIAN_BIND_HOST: 0.0.0.0
+  GUARDIAN_PORT: "8001"
+  # Empty disables forwarded-header trust. Set only exact trusted proxy IPs.
+  GUARDIAN_TRUSTED_PROXY_IPS: ${GUARDIAN_TRUSTED_PROXY_IPS:-}
+
+x-runtime: &runtime
+  image: ${GUARDIAN_IMAGE:-cost-guardian:local}
+  build:
+    context: ../..
+    dockerfile: deploy/guardian/Dockerfile
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=16777216,mode=1777
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  stop_grace_period: 60s
+  environment: *environment
+  secrets: [mongo_url, oidc_client_secret, oidc_members]
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
+services:
+  bootstrap:
+    <<: *runtime
+    command: [bootstrap]
+    restart: "no"
+  api:
+    <<: *runtime
+    command: [run, api]
+    restart: unless-stopped
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${GUARDIAN_HOST_PORT:-8001}:8001"
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/api/ready', timeout=5).read(1024)"]
+      interval: 15s
+      timeout: 7s
+      start_period: 15s
+      retries: 3
+  worker:
+    <<: *runtime
+    command: [run, worker]
+    restart: unless-stopped
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+
+secrets:
+  mongo_url:
+    file: ${GUARDIAN_MONGO_URL_SECRET_FILE:?Set the Mongo URI secret file path}
+  oidc_client_secret:
+    file: ${GUARDIAN_OIDC_CLIENT_SECRET_FILE:?Set the client secret file path}
+  oidc_members:
+    file: ${GUARDIAN_OIDC_MEMBERS_JSON_FILE:?Set the membership JSON file path}

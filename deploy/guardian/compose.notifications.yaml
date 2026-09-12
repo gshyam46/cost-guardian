@@ -1,0 +1,26 @@
+# Apply together with compose.yaml. The same destination reaches every role.
+services:
+  bootstrap:
+    environment:
+      GUARDIAN_SLACK_WEBHOOK_URL_FILE: /run/secrets/slack_webhook
+    secrets: [slack_webhook]
+  api:
+    environment:
+      GUARDIAN_SLACK_WEBHOOK_URL_FILE: /run/secrets/slack_webhook
+    secrets: [slack_webhook]
+  worker:
+    environment:
+      GUARDIAN_SLACK_WEBHOOK_URL_FILE: /run/secrets/slack_webhook
+    secrets: [slack_webhook]
+  notifications:
+    extends:
+      file: compose.yaml
+      service: worker
+    command: [run, notifications]
+    environment:
+      GUARDIAN_SLACK_WEBHOOK_URL_FILE: /run/secrets/slack_webhook
+    secrets: [slack_webhook]
+
+secrets:
+  slack_webhook:
+    file: ${GUARDIAN_SLACK_WEBHOOK_URL_SECRET_FILE:?Set the Slack secret file path}

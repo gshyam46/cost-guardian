@@ -68,7 +68,8 @@ oauthlib==3.3.1
 openai==1.99.9
 orjson==3.11.4
 ormsgpack==1.12.0
-packaging==25.0
+# Langfuse 2.53.9 requires >=23.2,<25; keep the existing SDK contract for R0.
+packaging==24.2
 pandas==2.3.3
 passlib==1.7.4
 pathspec==0.12.1

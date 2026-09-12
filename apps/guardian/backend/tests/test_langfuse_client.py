@@ -1,13 +1,7 @@
-"""Unit tests for guardian/langfuse_client.py's field-extraction logic.
+"""Compatibility helpers delegate to the shared nullable normalization contract.
 
-This is the one file in guardian/ that has never been exercised against a real
-Langfuse API response (see docs/PROGRESS.md blockers). These tests can't cover that --
-only a live run can -- but they do cover the thing that's actually within reach right
-now: given the field shapes Langfuse's docs say a GENERATION observation has, does the
-extraction logic produce the right TraceMetric, and does it fail safely (skip, not
-crash) on missing/malformed data. Both dict-shaped and attribute-object-shaped inputs
-are tested because the code was written defensively for either, not knowing in advance
-which the installed SDK version returns.
+These are fixture checks, not live source evidence. Typed coverage, normalization
+edge cases and the installed SDK transport are covered in the R1 source tests.
 """
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -66,8 +60,8 @@ def test_extract_tokens_falls_back_to_prompt_plus_completion():
     assert _extract_tokens(obs) == 150
 
 
-def test_extract_tokens_defaults_to_zero_when_absent():
-    assert _extract_tokens({}) == 0
+def test_extract_tokens_stays_unknown_when_absent():
+    assert _extract_tokens({}) is None
 
 
 # --- _extract_cost --------------------------------------------------------
@@ -81,8 +75,8 @@ def test_extract_cost_from_cost_details_total():
     assert _extract_cost(obs) == 0.01
 
 
-def test_extract_cost_defaults_to_zero_when_absent():
-    assert _extract_cost({}) == 0.0
+def test_extract_cost_stays_unknown_when_absent():
+    assert _extract_cost({}) is None
 
 
 # --- _extract_latency_ms ----------------------------------------------------
@@ -99,8 +93,8 @@ def test_extract_latency_from_start_end_time_when_no_latency_field():
     assert _extract_latency_ms(obs) == 2000.0
 
 
-def test_extract_latency_defaults_to_zero_when_absent():
-    assert _extract_latency_ms({}) == 0.0
+def test_extract_latency_stays_unknown_when_absent():
+    assert _extract_latency_ms({}) is None
 
 
 # --- _stringify --------------------------------------------------------------
@@ -121,6 +115,7 @@ def test_stringify_none_stays_none():
 
 def _base_observation(**overrides):
     data = {
+        "id": "observation-1",
         "trace_id": "trace-1",
         "name": "profile_analyst",
         "model": "groq/llama-3.3-70b-versatile",
@@ -167,6 +162,7 @@ def test_observation_to_trace_metric_survives_completely_malformed_input():
 
 def test_observation_to_trace_metric_works_with_attribute_style_object():
     obs = SimpleNamespace(
+        id="observation-2",
         trace_id="trace-2",
         name="market_hunter",
         model="groq/llama-3.3-70b-versatile",
@@ -236,7 +232,8 @@ def test_trace_url_returns_none_for_empty_trace_id():
 # --- fetch_recent_generations SDK path ----------------------------------------
 # Regression test for the other live-API bug: the code called
 # `client.api.observations.get_many(...)` (the v3 SDK path), which raises
-# AttributeError on langfuse 2.x. The correct call is `client.fetch_observations()`.
+# AttributeError on langfuse 2.x. Explicit v1 compatibility retains the generated
+# SDK2 resource path and convenience-method support for these minimal fixtures.
 
 class _FakeObservationsResponse:
     def __init__(self, data):
@@ -257,11 +254,12 @@ class _FakeLangfuseClient:
     def fetch_observations(self, **kwargs):
         self.calls.append(kwargs)
         page_size = kwargs.get("limit", len(self._observations))
-        return _FakeObservationsResponse(self._observations[:page_size])
+        offset = (kwargs.get("page", 1) - 1) * page_size
+        return _FakeObservationsResponse(self._observations[offset:offset + page_size])
 
 
 def test_fetch_recent_generations_uses_fetch_observations_api():
-    source = LangfuseTraceSource()
+    source = LangfuseTraceSource(api_version="v1")
     fake = _FakeLangfuseClient([_base_observation()])
     source._client = fake
 
@@ -280,8 +278,8 @@ def test_fetch_recent_generations_uses_fetch_observations_api():
 def test_fetch_never_requests_more_than_the_api_page_cap():
     """Regression: Langfuse 400s on limit > 100 ("Too big: expected number to be <=100").
     Asking for 500 in one shot broke every worker poll against the live API."""
-    source = LangfuseTraceSource()
-    fake = _FakeLangfuseClient([_base_observation() for _ in range(100)])
+    source = LangfuseTraceSource(api_version="v1")
+    fake = _FakeLangfuseClient([_base_observation(id=f"obs-{index}") for index in range(100)])
     source._client = fake
 
     source.fetch_recent_generations(since=datetime(2026, 1, 1, tzinfo=timezone.utc), limit=500)
@@ -291,8 +289,8 @@ def test_fetch_never_requests_more_than_the_api_page_cap():
 
 
 def test_fetch_pages_through_results_beyond_one_page():
-    source = LangfuseTraceSource()
-    fake = _FakeLangfuseClient([_base_observation() for _ in range(100)])
+    source = LangfuseTraceSource(api_version="v1")
+    fake = _FakeLangfuseClient([_base_observation(id=f"obs-{index}") for index in range(250)])
     source._client = fake
 
     metrics = source.fetch_recent_generations(
@@ -306,8 +304,8 @@ def test_fetch_pages_through_results_beyond_one_page():
 
 def test_fetch_stops_paging_on_a_short_page():
     """A page smaller than requested means we've reached the end -- stop, don't loop."""
-    source = LangfuseTraceSource()
-    fake = _FakeLangfuseClient([_base_observation() for _ in range(3)])
+    source = LangfuseTraceSource(api_version="v1")
+    fake = _FakeLangfuseClient([_base_observation(id=f"obs-{index}") for index in range(3)])
     source._client = fake
 
     metrics = source.fetch_recent_generations(
@@ -323,7 +321,7 @@ def test_fetch_recent_generations_returns_empty_on_sdk_error():
         def fetch_observations(self, **kwargs):
             raise AttributeError("'Langfuse' object has no attribute 'api'")
 
-    source = LangfuseTraceSource()
+    source = LangfuseTraceSource(api_version="v1")
     source._client = _Exploding()
 
     # Must degrade to [] rather than taking the worker down.

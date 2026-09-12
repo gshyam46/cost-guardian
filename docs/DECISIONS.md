@@ -1,117 +1,105 @@
-# Cost Guardian — Architectural Decisions
+# Cost Guardian: decision register
 
-Short-form log. Each entry: decision, why, what it rules out.
+Updated 2026-09-12. **Confirmed requirement** means explicitly requested by the founder. **Planning decision** is the recommended direction for implementation, not a claim that code or provisioning exists. Revisit with evidence and append a superseding decision rather than silently changing rationale.
 
----
+Historical decisions are preserved in [archive](archive/2026-09-09/DECISIONS.md). Old shared-session auth, “no settings needed,” “aggregates only,” no-managed-telemetry and phase references are superseded below.
 
-**⚠️ `backend/.env` was untracked from git on 2026-09-09 — historical keys are
-compromised.** The file was committed in `6b20601` and `bbb6820`, and the repo has a
-GitHub remote (`gshyam46/cost-guardian`). It has now been added to `.gitignore` and
-removed from the index (`git rm --cached`, file left on disk), so newly-added
-credentials — Langfuse, the replacement Groq key, and the Atlas connection string with
-its password — will never be committed. **This does not retroactively protect anything
-already in history.** Any key present in those two commits must be rotated:
-`OPENROUTER_API_KEY` (highest priority — still live with credit on it),
-`GOOGLE_GEMINI_API_KEY`, `GOOGLE_API_KEY`, `EMERGENT_LLM_KEY`. The original Groq key is
-already dead so it carries no residual risk. Rotating is the fix; rewriting history
-(`filter-repo`/BFG) only helps if the repo has never been cloned or forked.
+| ID | Status | Decision | Reason / consequence |
+|---|---|---|---|
+| ADR-01 | Confirmed requirement | AI SaaS/RAG/agent teams can onboard without existing telemetry or Langfuse | Guided managed capture is part of the product; BYO Langfuse remains supported |
+| ADR-02 | Planning decision | Publish a tested integration matrix, starting Python and JS/TS server paths | Broad audience does not imply every SDK/framework works; custom/no-code stacks need a supported export |
+| ADR-03 | Initial direction; narrowed by ADR-41 | Keep Langfuse behind an adapter for existing-source and candidate managed raw-telemetry use | Native numeric JSON capture now supplies a bounded no-Langfuse path; no raw-trace infrastructure rewrite; managed hosting/provisioning/economics must still pass R0-03 |
+| ADR-04 | Bounded R1-02 implementation; refined by ADR-29/31 | Persist an explicit numeric/identity/timing allowlist and safe PII categories | Enables reconciliation without retaining raw output/status text/user/session/tags; managed capture privacy and workflow economics remain later work |
+| ADR-05 | Bounded R1-02 implementation; full operating gate open | At-least-once ingestion with durable pages, work and replaceable materialization | Identical replay is a no-op; source and processing progress are separate; transactions and a connection fence protect each commit |
+| ADR-06 | Stable finding identity implemented; grouping planned for R3 | Separate finding identity from incident grouping | Source/observation/rule/finding hashes preserve distinct calls; atomic insert-only incidents retain human resolution on replay |
+| ADR-07 | Planning decision | Core promise is workflow cost/reliability response, including RAG operational metadata | Per-call charts do not prove business impact; outcome coverage must be explicit |
+| ADR-08 | Named sessions and direct-ingestion keys implemented; broader privacy/lifecycle open | Named users and scoped keys; content capture/previews off by default | ADR-39/40/42 implement OIDC authority, actor audit and write-only keys. Direct JSON excludes raw content; Langfuse preview defaults and retention/offboarding remain unfinished |
+| ADR-09 | Fixed deployment binding implemented; beta operations remain open | Isolated deployment/database/backing project per beta organization | Reject organization/project/environment/connection/issuer/client reassignment; no shared-tenant routing or proof of vendor-project ownership; measure operating cost |
+| ADR-10 | Planning decision | Shared self-service follows tested tenant isolation across every data path | Per-project API keys alone do not implement tenancy; caches/jobs/exports/deletion also require scope |
+| ADR-11 | Planning decision | Notifications, runbooks, feedback and recovery verification precede AI investigation | Completes the response loop with deterministic, inspectable behavior |
+| ADR-12 | Planning decision | Polling is advisory monitoring; no enforced budgets or automatic remediation | No inline control path exists; stop implying prevention through “guardrails” marketing |
+| ADR-13 | Planning decision | PII pattern detection stays experimental and opt-in; no generic security/quality claims | Format match is not a leak; RAG retrieval health is not groundedness; evaluate before marketing |
+| ADR-14 | Planning decision | Budget/error-rate policy complements evaluated relative anomalies | Handle volume growth, materiality, cold start and recovered retries; statistical outlier does not equal urgent incident |
+| ADR-15 | Planning decision | One modular backend with separate process roles; no initial Kafka/warehouse rewrite | Existing stack can validate the product; add infrastructure only for measured load/operational need |
+| ADR-16 | Planning decision | Maintain dependency support via adapter/store/toolchain migrations | Validate modern Langfuse contracts, PyMongo Async and maintained frontend builds with rollback and tests |
+| ADR-17 | Planning decision | Release status uses evidence gates, not averaged completion percentages | Historical demos cannot close production reliability or customer-value gates |
+| ADR-18 | Implemented in R0-01; offline verified | Founder app remains an independent demo; verification uses independent processes/HTTP | Avoid shared `config/db/server` imports and configuration collisions; live verification remains pending |
+| ADR-19 | Planning decision | Subscription/usage pricing is a hypothesis; pilots may use manual invoicing | Observe willingness to pay and managed-telemetry/support economics before pricing/automating billing |
+| ADR-20 | Implemented in R0-01 | Ordinary CI is offline; live verification is a separate explicit test-environment action | Paid traffic and application secrets are absent from pull-request checks; reports distinguish evidence types |
+| ADR-21 | Implemented in R0-01; updated through R3-02 | Original product/policy gaps remain executable regressions; remove a strict expected-failure marker only after its assertion passes | All seven original assertions now pass, including the known-zero-baseline transition; original expected outcomes were preserved |
+| ADR-22 | Implemented in R0-01; SDK sequencing superseded by ADR-26 | Record per-app resolved Python constraints and npm lockfiles to reproduce the baseline | Driver/CRA toolchain modernization remains separate R4-02 work; Langfuse adapter migration is now R1-01/pre-beta critical |
+| ADR-23 | Implemented in R0-01 | Remove unused template scripts, badge and external template analytics | No application code depends on them; reduces unnecessary script/data access while R2 replaces shared browser keys |
+| ADR-24 | Implemented in bounded R1; worker continuation extended by ADR-31 | Share normalization and typed bounded reads; never mark uncommitted data complete | Live reads retain bounded coverage; v2 worker now persists accepted/quarantined pages and resumes; v1 incomplete reads still stop |
+| ADR-25 | Implemented in bounded R1; accounting extended by ADR-31 | Preserve measurement missingness and legacy coverage; bound actual source jobs independently of cancelled callers | Nullable totals and aggregate issue codes prevent fabricated zero/non-finite JSON; four source slots remain occupied until physical work completes; old increments remain provisional |
+| ADR-26 | Reader implemented locally; exporter/live evidence remains required before beta | Migrate legacy Langfuse reads and verify a supported source/exporter matrix before onboarding external customers | Cloud retires legacy observations/traces on 2026-11-16; self-hosted v4 omits them; supersedes ADR-22's original SDK deferral to R4 |
+| ADR-27 | Implemented in R1-01; locally verified | Default to direct HTTPX Observations v2; legacy SDK2 requires explicit `LANGFUSE_READ_API=v1` | No exporter SDK is constructed by the v2 reader; no automatic fallback can hide unsupported/auth failures; legacy rollback requires a supported source |
+| ADR-28 | Implemented in R1-01; locally verified | Build live/run views from observations only, with bounded run absence and unknown workflow/context semantics | Run lookup defaults to 168 hours, permits 1–168, and returns 200 `not_observed` for complete empty results; uncached source failures return run 503 or live 200 degraded/null statistics; cached fallback stays stale; no invented workflow duration |
+| ADR-29 | Implemented conservatively in bounded R1-02 | Scope identity by connection/source/project/trace/observation; quarantine changed copies in both source modes | V4 resubmission does not order revisions. Identical replay is a no-op; conflicting identities become unknown coverage and cannot regain trust through original-copy replay. Legacy revision ordering remains unverified |
+| ADR-30 | Implemented in R1-01; locally verified | Trust present v2 measurement detail maps, preserve wire decimals and keep raw cursors internal | Empty/partial maps cannot become known measurements through generated scalar defaults; explicit zero stays known; exclusive cached/reasoning buckets reconcile; bounded requests and logs avoid exposing cursor tokens |
+| ADR-31 | Bounded R1-02 implementation; cutover/load gate open | Commit ledger/dispositions/work/page progress in fenced Mongo transactions; replace buckets and finish detector work transactionally | Replica-set transactions required, no production fallback; five 100-row v2 pages per poll resume durably; 24-hour overlap accounts all initial history; detector work waits for traversal exhaustion; old increments require explicit cutover |
+| ADR-32 | Implemented for the pinned Motor 3.3.1 path; real fault evidence tracked in VALIDATION | Use an explicit bounded transaction and commit-retry loop instead of relying on the driver's helper | Real Mongo testing exposed a commit acknowledgement failure outside the helper's retry boundary. Retry ambiguous commit on the same transaction; retry the callback only for a qualifying transaction error. Keep source calls and rule evaluation outside retry callbacks |
+| ADR-33 | Implemented in bounded R1-02 | Block query-fingerprint mismatch; permit one invalid-cursor restart of the original fixed window | Never silently change source scope, bounds or normalization while resuming. Preserve the original fingerprint on restart; deterministic identity makes repeated accepted pages safe |
+| ADR-34 | Implemented in bounded R1-03; operating gate open | Aggregate incident summaries in Mongo and return one response with UTC calendar windows and date coverage | Removes the 1,000-open/10,000-trend caps; recent seven days includes today and reconciles with a seven-day trend; half-open millisecond cutoff excludes future dated counts, while open totals describe current status |
+| ADR-35 | Implemented in bounded R1-03 | Add canonical BSON creation time to new writes; interpret legacy dates without rewriting history | Aware ISO/BSON legacy dates retain UTC meaning; missing/invalid/naive dates remain explicit partial coverage. Compatibility endpoints return 503 when their old shapes cannot represent incompleteness; no silent mass migration |
+| ADR-36 | Implemented in bounded R1-03 | Separate incident-list failure from successful empty results and keep refresh state scoped to its filter | Retry, cancellation and timeouts are visible; failed refresh may retain labelled same-filter rows, but Open rows cannot appear under Resolved |
+| ADR-37 | Local access contract retained; OIDC extension in ADR-39 | Verify access through a dedicated endpoint independent of monitoring | Local header/Bearer mode stays database-independent; OIDC verifies its session, membership and fixed binding in Mongo. Summary/source failures cannot masquerade as rejected identity; database outage makes named access unavailable |
+| ADR-38 | R2-03 prerequisite implemented; extended by ADR-39/42 | Verify access before protected rendering and separate access recovery from setup health | Local keys are verified before persistence; OIDC ignores stored keys and keeps identity/CSRF in memory. Langfuse setup stays diagnostic; direct setup adds owner-only key management without provisioning accounts/projects or instrumenting the app |
+| ADR-39 | R2-01 isolated named-access foundation implemented locally | Opt-in maintained-library OIDC code flow, PKCE/nonce and opaque server sessions; no key fallback | Server-verified issuer/subject maps to operator-configured owner/operator/viewer membership; eight-hour absolute sessions use secure cookies and a fixed database binding. Real IdP/TLS deployment and membership administration remain open |
+| ADR-40 | R2-01 transactional action boundary implemented; real local Mongo evidence | Recheck session/scope and resolve with one deterministic actor audit inside the transaction | Session/binding writes fence concurrent logout; only the winning open-to-resolved transition changes time and adds audit. Majority state consumption/revocation and existing explicit commit retries prevent unsafe replay; no retroactive actor for legacy resolved records |
+| ADR-41 | Bounded native capture implemented locally; narrows ADR-03 | Accept strict numeric terminal-call JSON directly, with one pinned capture mode per isolated database | Teams can export Python/JS call metrics without a Langfuse account. Reuse the numeric ledger/detectors; do not claim OTLP, raw tracing, automatic RAG capture or settled workflow outcomes. First direct/Langfuse claims serialize on the same binding; no automatic mode migration |
+| ADR-42 | Scoped credentials and receipt/processing distinction implemented; local Mongo/HTTP proof | Use owner-managed, hashed write-only keys and atomic idempotent admission; separate test receipt, real receipt and analysis | Human roles cannot be replaced by ingestion keys. Key/audit and intake/quota/receipt/inbox changes are transactional and fenced against revocation. A 202 is durable acceptance, test traffic never affects production totals, and pending work stays visible; one-time secrets cannot be recovered through replay |
+| ADR-43 | Bounded Python/Node exporters and lifecycle helpers implemented locally | Use a per-process queue, one sender, immutable retries, prefix flush and explicit unconfirmed counters | Removes the application's queue implementation burden for long-running processes. Call/stream helpers preserve provider behavior and unknown measurements. No disk spool, process-crash guarantee or automatic provider instrumentation is implied |
+| ADR-44 | R3-02 monitoring rules implemented locally; actual API/Mongo proof | Owners configure absolute per-call cost/duration limits and reported-error alerts; pin one policy revision at first evaluation | Gives new projects useful rules without a statistical history. Transactional saves use revision checks and audit; pinned retries and completed incidents survive later edits. Monitoring creates advisory incidents; it does not enforce spending |
 
-**Build on Langfuse rather than a custom trace store.** Trace capture, cost
-computation, and a trace explorer UI are commoditized and expensive to build well.
-Langfuse Cloud's free tier removes the entire "build a database + UI for raw traces"
-scope. Rules out: self-hosting Langfuse for the MVP (revisit only if a customer needs
-data residency).
+## ADR-45: durable Slack delivery for the isolated deployment
 
-**PII detector ships before prompt-injection detector.** PII has a mechanically
-checkable ground truth (regex against known formats: email, SSN, card, IP). Prompt
-injection heuristics are keyword-based and high-false-positive with no labeled
-benchmark to grade against yet. Rules out: shipping an unvalidated "injection risk
-score" as a product claim.
+Accepted for implementation on 2026-09-12. [NOTIFICATIONS.md](NOTIFICATIONS.md) defines the contract before code. The operator holds one Slack incoming-webhook secret in process configuration; a named owner tests and enables it in Setup. Newly inserted incidents enqueue a redacted message in their existing transaction. A separate delivery worker provides fenced attempts, bounded retries, explicit unconfirmed outcomes and visible history. Owner retry commands are audited and deduplicated. Destination rotation invalidates verification and never silently redirects old jobs. Generic webhooks, Slack OAuth installation, multiple destinations and grouped lifecycle updates are deferred. Local synthetic transport evidence does not certify live Slack or deployment readiness. Local implementation and evidence are recorded in [VALIDATION.md](VALIDATION.md); deployed acceptance remains open.
 
-**Detectors are pure functions: `evaluate(baseline, candidates) -> list[DetectorResult]`.**
-No network/DB/filesystem access inside a detector. This is what makes every detector
-unit-testable in milliseconds with hand-built fixtures, independent of whether Langfuse
-or Mongo are reachable. Rules out: detectors that call an LLM or a database directly.
+## ADR-46: explicit OpenAI usage adapters; cost provenance remains separate
 
-**`IncidentStore` is an interface (`InMemoryIncidentStore` / `MongoIncidentStore`), not
-a concrete Mongo class.** Lets `incident_engine.py`'s dedup/severity logic be tested
-without a running database. This paid off immediately: this environment has no
-reachable MongoDB at all, and detector + incident-engine logic was still fully
-verified.
+Accepted on 2026-09-12 before implementation in [PROVIDERS.md](PROVIDERS.md), now implemented locally. Support OpenAI Responses and single-choice Chat Completions through small Python sync/async and Node async call/stream helpers around the application's existing SDK operation. Reuse the bounded exporter, strict numeric event contract and existing rule/incident/delivery path. Copy only validated numeric usage and technical caller labels; retain original provider results, chunks and exceptions. A semantic terminal marker is required for streaming success; missing/invalid usage and interrupted work remain unknown. Repeated snapshots are never summed, and conflicting valid snapshots invalidate trust even if an invalid snapshot appeared between them.
 
-**`backend/observability/` (the old Datadog-based module) is left in place, untouched,
-not imported anywhere.** It's dead code, not live code — deleting it isn't required for
-the MVP and isn't worth the risk of removing something without being asked to.
+Token usage is not a billed USD amount. These helpers emit no cost estimate. Pricing requires its own provenance contract across event admission, old fingerprint compatibility, aggregation, incident evidence and UI; adding an unversioned default field would alter historical immutable hashes. Duration/error monitoring and actual token visibility are useful now, but these helpers alone do not provide spend analysis. Additional providers, retrieval/embedding events, workflow outcomes and a durable spool remain separate work. Exact tested SDK versions and synthetic/local versus live-provider evidence belong in [VALIDATION.md](VALIDATION.md). ADR-47 now implements the first deployment package; deployed onboarding and operating evidence remain the next product priority.
 
-**`LlmChat` no longer takes `session_id` at construction time.** Agent instances are
-long-lived singletons (`NicheDiscoveryOrchestrator()` is instantiated once at module
-load in `api/analysis.py`), so a per-instance session id baked in at `__init__` was
-already wrong before Langfuse entered the picture — every request from process start
-would have shared one session id. `run_id`/`agent_name`/`user_id` are now passed
-per-call to `send_message()` instead.
+## Open decisions and how to resolve them
 
-**Guardian API reuses the app's existing session auth**, not a separate auth system.
-Deliberate MVP scope cut for a single-tenant "watch my own app" product. Rules out:
-serving a second customer's data through this API as-is — real multi-tenancy needs
-per-customer Guardian API keys (Phase 5/7 concern, not before).
+ADR-47 (2026-09-12, contract accepted before code; implemented locally): package the isolated direct/OIDC path first, with the existing Python API serving a production static build, separate ingestion/notification roles and an external authenticated TLS Mongo replica set. [DEPLOYMENT.md](DEPLOYMENT.md) precedes code. Explicit bootstrap creates matching identity/source state before the first login; a read-only readiness probe is distinct from liveness, worker freshness and activation. Keep secrets in runtime values or bounded mounted files, disable dotenv in packaged entrypoints and exclude local secrets/history from build context. Use the same role entrypoints in native verification and Compose. Broader Langfuse packaging waits for its source/privacy release gates; no shared tenancy or managed-account provisioning is implied. Real browser login must be proved without injected sessions or intercepted API responses, and native proof must not be labelled Docker/TLS acceptance.
 
-**Trace deep-links are built directly, not via the SDK.** _(Revised 2026-09-09 after
-live testing.)_ Originally this called the SDK's `get_trace_url()` on the theory that
-letting the client resolve the project id beats tracking our own. Against the real
-SDK that turned out to be wrong: langfuse 2.x's `get_trace_url()` takes **no
-arguments** and only returns a URL for the SDK's *current* trace context, which is
-useless for the worker's job of linking arbitrary historical trace ids — every link
-silently came back `None`. Now built as `{LANGFUSE_HOST}/trace/{trace_id}` (confirmed
-HTTP 200 against the live project, as is the longer project-scoped form). Still
-computed at response time rather than stored, so a host change never leaves stale
-links in Mongo. Lesson recorded because it generalises: the mocked tests passed
-because the mock encoded my *assumption* about the SDK, not its behaviour.
+ADR-43 (2026-09-12, implemented locally): provide bounded in-memory Python/Node background exporters with explicit call handles, prefix flush, retry/expiry limits and visible unconfirmed work. [EXPORTING.md](EXPORTING.md) records the contract before code. Runtime instrumentation performs local admission; one worker owns transport. Forced shutdown cannot promise remote non-delivery, and Python cannot forcibly stop an already running urllib/DNS operation. Existing manual sender APIs remain compatible. Actual localhost API/Mongo tests cover lifecycle completion and a lost committed receipt retried without inflated totals. ADR-46 now supplies the first explicit OpenAI usage adapters on that foundation; additional providers, RAG outcomes and actual customer activation remain separate gates.
 
-**LLM provider chain is Groq-first, chosen by live probing rather than inheritance.**
-The chain inherited from the original codebase was 100% dead —
-`groq/llama-3.3-70b-versatile` and `llama-3.1-8b-instant` aren't available on the
-account, `openrouter/allenai/olmo-3-32b-think` 404s, `openrouter/arcee/trinity-mini`
-was withdrawn. Every model in the current chain was probed live with an agent-sized
-prompt before being added. Groq leads on latency (~1-2s vs >30s and upstream
-rate-limiting on OpenRouter's shared free pool); one OpenRouter model is kept last as
-a cross-provider fallback so a Groq outage doesn't halt the pipeline. Request timeout
-raised 30s → 120s: the original value was shorter than a real agent response takes.
+[CAPTURE.md](CAPTURE.md) was agreed before native capture implementation. ADR-41 is a bounded response to the founder's no-Langfuse requirement: an operator configures an isolated OIDC deployment and an application exports allowlisted terminal-call metrics. It does not settle the managed backing-service decision or implement automatic instrumentation. The original manual senders perform synchronous Python or awaited Node network work and require an existing application queue. ADR-43 adds that process-local queue and bounded flush; neither path provides a durable spool. Explicit retries keep batch/observation identity stable.
 
-**Agent LLM calls use JSON mode (`response_format={"type": "json_object"}`), not just
-retries.** Every caller of `LlmChat` is an agent that must return parseable JSON. A
-3-attempt re-ask was added first, but the larger responses (~9k chars) came back
-malformed often enough to exhaust all three and kill the run. JSON mode constrains
-decoding so validity is guaranteed rather than hoped for, and as a side benefit stops
-models wrapping output in markdown fences (~2.5k chars vs ~6.2k for the same content).
-The re-ask loop is kept as a second line of defence.
+ADR-42 uses existing Mongo transactions rather than a second ingestion platform. Credential secrets are shown once and hashed at rest; expiry/revocation remains independent of human logout. Quotas, receipts and numeric inbox admission commit together, and worker ledger acceptance commits with inbox acknowledgement. Actual localhost tests cover concurrent initial source claims, key limits/replay, quota/backlog rollback, both revocation orderings and intake-to-incident HTTP. They do not establish sustainable load, customer setup, deployed TLS or retention/deletion. R2 remains in progress.
 
-**Langfuse fetches paginate at 100 items.** The API rejects `limit > 100` with a 400
-("Too big: expected number to be <=100"); we were asking for 200 and 500, so every
-worker poll failed. `fetch_recent_generations()` now pages. Worth noting the test
-written alongside the fix immediately caught a follow-on bug where a final partial
-page could overshoot the caller's requested limit.
+The R1 contracts in [TELEMETRY.md](TELEMETRY.md), [SOURCE_MIGRATION.md](SOURCE_MIGRATION.md) and [INGESTION.md](INGESTION.md) were recorded before their implementation slices. The ledger now supports durable v2 continuation, overlap, quarantine, pending work, fenced materialization and stable findings. Initial import accounts for the entire requested 24-hour window. An older checkpoint blocks for a backfill decision. Adding extensible source identity does not establish RAG support or tenant authorization.
 
-**Fixed a CSS variable namespace collision between `App.css` and shadcn's
-`index.css`.** `App.css` defined `--primary`/`--secondary`/`--accent`/`--border` as
-hex colors at `:root`, colliding with shadcn's design tokens of the same names (which
-use a space-separated HSL-triplet format consumed as `hsl(var(--x))`). App.css loads
-after index.css, so its hex values won the cascade, and `hsl(#0EA5E9)` etc. are
-invalid CSS — the declarations were silently dropped app-wide. Found via a Guardian
-incidents-page filter button rendering with invisible white-on-white text. Renamed
-App.css's custom properties to `--brand-*` rather than touching shadcn's `index.css`
-(the generated/framework file, conventionally left alone) or avoiding
-`variant="default"` in Guardian's own components (that would hide the bug rather than
-fix it, and it affects every other page's default-variant buttons too, not just
-Guardian's).
+ADR-27/28/30 have local contract evidence: 100-row requests, a 1,000-row live bound, a 15-second source-read budget, five-second network timeouts and an 8 MiB page response cap. Source requests have no automatic fallback/retry/redirect; later worker polls may retry durable work, and ADR-32 separately governs database transaction retries. Raw cursors stay out of public responses/logs. V2 detail maps remain authoritative, including empty/partial maps; explicit measured zero remains known.
 
-**Guardian's own dashboard does not add a settings/API-key page yet.** There's
-nothing to configure until multi-tenancy exists (Phase 7) — a single-tenant MVP has
-exactly one Langfuse project and one Mongo database, both already configured via
-`backend/.env`. Adding a settings page now would be UI for a feature that doesn't
-exist.
+R1-02 remains in progress. Rebuilds over 10,000 observations per hour/agent bucket or baselines over 5,000 earlier observations retain pending work and show degraded health; those bounds need workload validation. Legacy cutover with backup/reconciliation/rollback, retention and production recovery remain unfinished. Running an old incremental writer against ledger totals is not a safe rollback. [VALIDATION.md](VALIDATION.md) separates mock/wire, localhost replica-set and browser evidence; a single-node test does not establish production failover.
 
-**No download-and-run-a-real-MongoDB-binary workaround for this environment's missing
-Mongo.** The official Windows MongoDB zip is ~620MB; downloading it to unblock one
-session's verification is a worse trade than being explicit about the blocker and
-using `mongomock`/`InMemoryIncidentStore` for what can be verified offline. Rules out:
-treating "no live Mongo" as something to route around rather than surface to the user.
+[SUMMARIES.md](SUMMARIES.md) was recorded before the R1-03 summary implementation. Exact counts have bounded category/day output and query deadlines, not a silent input-row cap. Legacy conversion and index setup still need operating-cost validation; the request cutoff is not a historical open-state or database snapshot guarantee. Local acceptance covers high-count fixtures, UTC boundaries, actual store writes, safe failures and cancellation; unsupported legacy date operators require real Mongo evidence rather than a mock interpreter. R1-03 and the full R1 gate remain in progress.
+
+[ACCESS.md](ACCESS.md) was recorded before the R2-03 access/setup prerequisite; [IDENTITY.md](IDENTITY.md) records the named OIDC extension before its code. Local API-key semantics remain compatible, while OIDC never reads a saved browser key or accepts a key fallback. Its configured issuer/subject membership supplies roles and display labels. Organization/project/environment/connection/issuer/client are pinned in Mongo before sessions are accepted. This is one isolated deployment, not project selection, provisioning or shared tenancy.
+
+One-use login state is bound to a separate HttpOnly browser cookie and consumed before code exchange. App sessions are opaque, hashed at rest and explicitly expire after eight hours; the UI receives only actor/project/permissions/CSRF. Exact Origin plus session CSRF protects writes. All Guardian responses are noncacheable, and callback queries are removed from application access logs. Role changes require consistent operator configuration and process restarts across replicas; no membership administration UI is claimed.
+
+Named incident resolution rechecks/touches the session and binding within the same Mongo transaction as the conditional transition and audit insertion. Replays return the original resolved timestamp without an extra audit; historical resolved incidents are not assigned invented actors. Real local Mongo checks cover audit rollback, concurrent replay, both logout orderings, atomic session rotation and unknown commit acknowledgement recovery. Majority read/write concerns protect nontransactional identity operations; a single-node test does not establish deployment failover. ADR-08/09 remain partial until deployed provider/TLS access, customer credential lifecycle and privacy/offboarding gates pass; ADR-10 shared isolation remains planned.
+
+ADR-26 remains open for actual supported source/exporter versions. Default reads have migrated to direct v2 HTTPX, but SDK2 remains for explicit legacy reads and the unmigrated Founder exporter. Cloud legacy reads retire on **2026-11-16**; self-hosted v4 omits them. Older ingestion can take up to 15 minutes to appear in v2, so short live harness timeouts cannot certify it. A tested exporter, actual source availability, cutover and rollback evidence are still required before beta. Primary migration, availability and immutable-observation references are maintained in [SOURCE_MIGRATION.md](SOURCE_MIGRATION.md).
+
+| Decision | Proposed default | Evidence / decision owner | Deadline |
+|---|---|---|---|
+| Managed backing provider/deployment | Evaluate operator-managed Langfuse Cloud first | Engineering + founder: provisioning, terms, region, quotas, total cost and deletion proof | R0-03, before R2 external capture |
+| Supported Langfuse source/exporter matrix | Default v2 reader, modern exporter, explicitly scoped legacy rollback | Engineering: actual supported-version reads, missingness/pagination/availability behavior, exporter migration, cutover and rollback evidence | R1-01, before beta and before Cloud legacy retirement on 2026-11-16 |
+| Pilot runtime/integrations | Python LLM/RAG and JS/TS LLM workflow recipes | Engineering + three partner stacks; streaming/retries and version compatibility tests | R0-03 / R2-02 |
+| Identity provider deployment | OIDC foundation implemented with maintained verification and secure app sessions | Engineering + founder: register actual provider/TLS callback, test operations and membership/session lifecycle; assess support cost | R2-01, before external access |
+| First notification channel | Slack incoming webhook under ADR-45/[NOTIFICATIONS.md](NOTIFICATIONS.md); operator-held secret and owner test/activation | Local synthetic receiver evidence; validate deployed Slack/channel access and customer setup. Generic webhook/OAuth follow-up deferred | R3-03 / before beta |
+| Retention and rate limits | Architecture defaults are sizing targets only | Operator: load/cost test, privacy policy and partner needs | Before R4 |
+| Price/allowance/free trial | Workspace subscription with observation allowance | Founder: value interviews, willingness-to-pay and cost ledger | Before R5 |
+| Shared vs continued isolated hosting | Isolated beta; shared only if justified | Operator: support time, cost and isolation evidence | R5-01 |
+
+These are bounded implementation choices, not reasons to stop all engineering work. Contracts, correctness fixes and customer discovery can proceed while deployment/price decisions are resolved.
+
+## Existing credential-history action
+
+Earlier docs recorded exposed provider credentials in old commits. Current history metadata confirms the old environment file, but revocation was not verified in this review. R0-02 must record provider/account owner, revocation date and verification reference without secret values. Do not assume removing a tracked file rotated the keys.

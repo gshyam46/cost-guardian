@@ -1,0 +1,322 @@
+name: Offline verification
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: offline-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guardian:
+    name: Guardian / Python ${{ matrix.python }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+        os: [ubuntu-latest, windows-latest]
+    env:
+      PYTHON_DOTENV_DISABLED: "1"
+      LANGFUSE_PUBLIC_KEY: ""
+      LANGFUSE_SECRET_KEY: ""
+      MONGO_URL: mongodb://127.0.0.1:1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        id: python
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: apps/guardian/backend/requirements*
+      - name: Install Guardian dependencies
+        run: python -m pip install -r apps/guardian/backend/requirements.txt -c apps/guardian/backend/requirements.constraints.txt
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+      - name: Check dependency consistency
+        run: python -m pip check
+      - name: Backend tests, including explicit known gaps
+        working-directory: apps/guardian/backend
+        run: python -m pytest tests/ -q -rx --strict-markers --junitxml=../../../tools/reports/backend.xml
+      - name: Harness isolation and process tests
+        run: python -m unittest discover -s tools/tests -v
+      - name: Actual HTTP smoke with synthetic source and mocked Mongo
+        run: python tools/verify_mvp.py offline --guardian-python "${{ steps.python.outputs.python-path }}" --report tools/reports/offline.json
+      - name: Save offline evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: guardian-${{ matrix.python }}-${{ matrix.os }}
+          path: tools/reports/
+          retention-days: 14
+
+  mongo-ledger:
+    name: Real Mongo ledger recovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHON_DOTENV_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+      - run: python -m pip install -r apps/guardian/backend/requirements.txt -c apps/guardian/backend/requirements.constraints.txt
+      - name: Start isolated transaction-capable test database
+        run: |
+          docker run -d --name guardian-mongo -p 127.0.0.1:27017:27017 mongo:8.0.26 --replSet guardian-r102 --bind_ip_all --setParameter enableTestCommands=1
+          for attempt in {1..30}; do
+            if docker exec guardian-mongo mongosh --quiet --eval 'db.adminCommand({ping:1})'; then break; fi
+            sleep 1
+          done
+          docker exec guardian-mongo mongosh --quiet --eval 'rs.initiate({_id:"guardian-r102",members:[{_id:0,host:"localhost:27017"}]})'
+          for attempt in {1..30}; do
+            if docker exec guardian-mongo mongosh --quiet --eval 'if (!db.hello().isWritablePrimary) quit(1)'; then break; fi
+            sleep 1
+          done
+      - name: Transaction, restart, conflict and lease fault suite
+        run: |
+          mkdir -p tools/reports
+          python tools/test_mongo_ledger.py --mongo-url 'mongodb://127.0.0.1:27017/?replicaSet=guardian-r102&directConnection=true' > tools/reports/mongo-r102.json
+      - name: Save transaction evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mongo-ledger-recovery
+          path: tools/reports/mongo-r102.json
+          retention-days: 14
+      - name: Incident summary volume, date and query-plan checks
+        run: python tools/test_mongo_summaries.py --mongo-url 'mongodb://127.0.0.1:27017/?replicaSet=guardian-r102&directConnection=true' > tools/reports/mongo-summaries.json
+      - name: Save summary evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mongo-incident-summaries
+          path: tools/reports/mongo-summaries.json
+          retention-days: 14
+      - name: Identity state, session revocation and audited resolution transactions
+        run: python tools/test_mongo_identity.py --mongo-url 'mongodb://127.0.0.1:27017/?replicaSet=guardian-r102&directConnection=true' > tools/reports/mongo-identity.json
+      - name: Save identity transaction evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mongo-identity
+          path: tools/reports/mongo-identity.json
+          retention-days: 14
+      - name: Native capture authority, transaction faults and actual HTTP
+        run: python tools/test_mongo_capture.py --mongo-url 'mongodb://127.0.0.1:27017/?replicaSet=guardian-r102&directConnection=true' > tools/reports/mongo-capture.json
+      - name: Save capture transaction evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mongo-capture
+          path: tools/reports/mongo-capture.json
+          retention-days: 14
+      - name: Python and Node background exporters through actual HTTP and Mongo
+        run: python tools/test_mongo_exporters.py --mongo-url 'mongodb://127.0.0.1:27017/?replicaSet=guardian-r102&directConnection=true' > tools/reports/mongo-exporters.json
+      - name: Save exporter integration evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mongo-exporters
+          path: tools/reports/mongo-exporters.json
+          retention-days: 14
+      - name: Monitoring policy save, evaluation, audit and race checks
+        run: python tools/test_mongo_policies.py --mongo-url 'mongodb://127.0.0.1:27017/?replicaSet=guardian-r102&directConnection=true' > tools/reports/mongo-policies.json
+      - name: Save monitoring policy evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mongo-policies
+          path: tools/reports/mongo-policies.json
+          retention-days: 14
+      - name: Notification owner journey, outbox faults and localhost receiver
+        run: python tools/test_mongo_notifications.py --mongo-url 'mongodb://127.0.0.1:27017/?replicaSet=guardian-r102&directConnection=true' --report tools/reports/mongo-notifications.json
+      - name: Save notification delivery evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mongo-notifications
+          path: tools/reports/mongo-notifications.json
+          retention-days: 14
+      - name: Install isolated provider SDK fixtures
+        run: |
+          python -m venv .cache/provider-python
+          .cache/provider-python/bin/python -m pip install -c apps/founder-app/backend/requirements.constraints.txt openai==1.99.9 httpx==0.28.1 pydantic==2.12.4
+          npm ci --prefix tools/provider-fixtures --ignore-scripts --no-audit --no-fund
+      - name: Real SDK responses and streams through localhost intake and accounting
+        run: python tools/test_mongo_providers.py --mongo-url 'mongodb://127.0.0.1:27017/?replicaSet=guardian-r102&directConnection=true' --sdk-python .cache/provider-python/bin/python --report tools/reports/mongo-providers.json
+      - name: Actual asynchronous Python SDK object and stream compatibility
+        run: .cache/provider-python/bin/python -I tools/provider-fixtures/python_async_check.py --run > tools/reports/python-async-providers.json
+      - name: Save provider integration evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mongo-providers
+          path: |
+            tools/reports/mongo-providers.json
+            tools/reports/python-async-providers.json
+          retention-days: 14
+      - name: Stop owned test database
+        if: always()
+        run: docker rm -f guardian-mongo
+
+  founder:
+    name: Independent Founder environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHON_DOTENV_DISABLED: "1"
+      LANGFUSE_PUBLIC_KEY: ""
+      LANGFUSE_SECRET_KEY: ""
+      LITELLM_LOCAL_MODEL_COST_MAP: "True"
+      MONGO_URL: mongodb://127.0.0.1:1
+      DB_NAME: founder_ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: apps/founder-app/backend/requirements*
+      - run: python -m pip install -r apps/founder-app/backend/requirements.txt -c apps/founder-app/backend/requirements.constraints.txt
+      - run: python -m pip check
+      - name: Verify standalone imports without provider calls
+        working-directory: apps/founder-app/backend
+        run: python -c "from server import app; from services.orchestrator import NicheDiscoveryOrchestrator; assert not any('/guardian' in r.path for r in app.routes); print('Independent Founder imports passed')"
+
+  frontend:
+    name: ${{ matrix.app }} frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [guardian, founder-app]
+    defaults:
+      run:
+        working-directory: apps/${{ matrix.app }}/frontend
+    env:
+      CI: "true"
+      REACT_APP_GUARDIAN_URL: http://localhost:8001
+      REACT_APP_BACKEND_URL: http://localhost:8000
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/${{ matrix.app }}/frontend/package-lock.json
+      - run: npm ci
+      - run: npm test -- --watchAll=false --runInBand
+      - run: npm run build
+
+  native-deployment:
+    name: Native packaged onboarding with actual local OIDC
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PYTHON_DOTENV_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        id: python
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+      - run: python -m pip install -r apps/guardian/backend/requirements.txt -c apps/guardian/backend/requirements.constraints.txt
+      - name: Stage only the frontend files copied by the application image
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os, shutil
+          source = Path('apps/guardian/frontend')
+          target = Path('.cache/deployment-ci/frontend')
+          target.mkdir(parents=True)
+          def copy(relative):
+              path = source / relative
+              assert not any(part.startswith('.') for part in Path(relative).parts)
+              assert not any(parent.is_symlink() for parent in (path, *path.parents))
+              assert path.is_file() and path.resolve().is_relative_to(source.resolve())
+              destination = target / relative
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(path, destination)
+          for name in ('package.json', 'package-lock.json', 'craco.config.js', 'jsconfig.json', 'postcss.config.js', 'tailwind.config.js', 'public/index.html'):
+              copy(name)
+          for directory, folders, files in os.walk(source / 'src', followlinks=False):
+              folders[:] = [name for name in folders if not name.startswith('.') and name not in ('node_modules', '__pycache__')]
+              assert not any((Path(directory) / name).is_symlink() for name in folders)
+              for name in files:
+                  if not name.startswith('.') and Path(name).suffix in ('.js', '.jsx', '.css'):
+                      copy((Path(directory) / name).relative_to(source))
+          PY
+      - name: Build same-origin frontend without dotenv or source maps
+        working-directory: .cache/deployment-ci/frontend
+        env:
+          CI: "true"
+          NODE_ENV: production
+          REACT_APP_GUARDIAN_URL: /
+          GENERATE_SOURCEMAP: "false"
+          DISABLE_HOT_RELOAD: "true"
+          REACT_APP_ENABLE_VISUAL_EDITS: "false"
+          ENABLE_HEALTH_CHECK: "false"
+        run: |
+          npm ci --include=dev
+          npm run build
+      - name: Install isolated browser fixture
+        run: |
+          npm install --prefix .cache/deployment-browser --no-save --package-lock=false --ignore-scripts --no-audit --no-fund playwright@1.63.0
+          node .cache/deployment-browser/node_modules/playwright/cli.js install --with-deps chromium
+      - name: Start owned replica and standalone negative fixture
+        run: |
+          docker run -d --name guardian-deployment-mongo -p 127.0.0.1:27019:27019 mongo:8.0.26 --port 27019 --replSet guardian-r102 --bind_ip_all
+          docker run -d --name guardian-deployment-standalone -p 127.0.0.1:27020:27020 mongo:8.0.26 --port 27020 --bind_ip_all
+          for attempt in {1..30}; do
+            if docker exec guardian-deployment-mongo mongosh --port 27019 --quiet --eval 'db.adminCommand({ping:1})'; then break; fi
+            sleep 1
+          done
+          docker exec guardian-deployment-mongo mongosh --port 27019 --quiet --eval 'rs.initiate({_id:"guardian-r102",members:[{_id:0,host:"127.0.0.1:27019"}]})'
+          for attempt in {1..30}; do
+            if docker exec guardian-deployment-mongo mongosh --port 27019 --quiet --eval 'if (!db.hello().isWritablePrimary) quit(1)'; then break; fi
+            sleep 1
+          done
+          docker exec guardian-deployment-mongo mongosh --port 27019 --quiet --eval 'if (!db.hello().isWritablePrimary) quit(1)'
+          for attempt in {1..30}; do
+            if docker exec guardian-deployment-standalone mongosh --port 27020 --quiet --eval 'db.adminCommand({ping:1})'; then break; fi
+            sleep 1
+          done
+          docker exec guardian-deployment-standalone mongosh --port 27020 --quiet --eval 'db.adminCommand({ping:1})'
+      - name: Actual entrypoints, signed OIDC browser, intake and worker
+        run: python tools/test_deployment.py --guardian-python '${{ steps.python.outputs.python-path }}' --mongo-url 'mongodb://127.0.0.1:27019/?replicaSet=guardian-r102&directConnection=true' --standalone-url 'mongodb://127.0.0.1:27020/?directConnection=true' --playwright .cache/deployment-browser/node_modules/playwright --static-dir .cache/deployment-ci/frontend/build --report tools/reports/deployment-native/report.json
+      - name: Save native deployment evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: native-deployment
+          path: tools/reports/deployment-native/
+          retention-days: 14
+      - name: Stop only this job's Mongo fixtures
+        if: always()
+        run: docker rm -f guardian-deployment-mongo guardian-deployment-standalone

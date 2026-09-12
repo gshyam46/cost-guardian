@@ -10,9 +10,10 @@ import statistics
 from typing import List
 
 from ..models import TraceMetric
-from .base import DetectorResult
+from .base import DetectorResult, observation_identity
 
 NAME = "reliability_anomaly"
+RULE_VERSION = "1"
 
 MIN_BASELINE_SAMPLES = 5
 LATENCY_Z_SCORE_THRESHOLD = 3.0
@@ -24,11 +25,11 @@ def evaluate(baseline: List[TraceMetric], candidates: List[TraceMetric]) -> List
 
     successful_baseline_by_agent: dict[str, list[TraceMetric]] = {}
     for trace in baseline:
-        if trace.status == "success":
+        if trace.status == "success" and trace.latency_ms is not None:
             successful_baseline_by_agent.setdefault(trace.agent_name, []).append(trace)
 
     for candidate in candidates:
-        if candidate.status != "success":
+        if candidate.status == "error":
             results.append(
                 DetectorResult(
                     triggered=True,
@@ -39,8 +40,12 @@ def evaluate(baseline: List[TraceMetric], candidates: List[TraceMetric]) -> List
                     summary=f"{candidate.agent_name} call failed (status={candidate.status}).",
                     evidence={"status": candidate.status, "model": candidate.model},
                     agent_name=candidate.agent_name,
+                    **observation_identity(candidate, "call_failure", RULE_VERSION),
                 )
             )
+            continue
+
+        if candidate.status != "success" or candidate.latency_ms is None:
             continue
 
         agent_baseline = successful_baseline_by_agent.get(candidate.agent_name, [])
@@ -95,6 +100,7 @@ def evaluate(baseline: List[TraceMetric], candidates: List[TraceMetric]) -> List
                 ),
                 evidence=evidence,
                 agent_name=candidate.agent_name,
+                **observation_identity(candidate, "latency_regression", RULE_VERSION),
             )
         )
 

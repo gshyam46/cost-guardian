@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,20 +25,24 @@ const GuardianIncidents = () => {
   const [filter, setFilter] = useState('open');
 
   const fetchIncidents = useCallback(
-    async () => (await guardianApi.listIncidents(filter)).data,
+    async ({ signal } = {}) => {
+      const response = await guardianApi.listIncidents(filter, { signal });
+      if (!Array.isArray(response.data)) throw new Error('Invalid incident response');
+      return { filter, incidents: response.data };
+    },
     [filter],
   );
 
-  const { data, loading, refreshing, error, lastUpdated } = useLiveData(fetchIncidents, {
+  const { data, loading, refreshing, error, lastUpdated, reload } = useLiveData(fetchIncidents, {
     refetchKey: filter,
   });
 
-  if (error && !data) toast.error('Could not load incidents');
-
-  const incidents = data ?? [];
+  const hasCurrentData = data?.filter === filter && Array.isArray(data?.incidents);
+  const incidents = hasCurrentData ? data.incidents : [];
+  const isLoading = loading || (!hasCurrentData && !error);
 
   return (
-    <GuardianLayout refreshing={refreshing} lastUpdated={lastUpdated}>
+    <GuardianLayout refreshing={refreshing} lastUpdated={hasCurrentData ? lastUpdated : null}>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold text-slate-900">Incidents</h2>
         <div className="flex gap-1">
@@ -48,6 +51,7 @@ const GuardianIncidents = () => {
               key={option.label}
               size="sm"
               variant={filter === option.key ? 'default' : 'outline'}
+              aria-pressed={filter === option.key}
               onClick={() => setFilter(option.key)}
             >
               {option.label}
@@ -56,16 +60,31 @@ const GuardianIncidents = () => {
         </div>
       </div>
 
-      {loading && <div className="animate-pulse text-slate-600">Loading incidents...</div>}
+      {isLoading && <div role="status" className="animate-pulse text-slate-600">Loading incidents...</div>}
 
-      {!loading && incidents.length === 0 && (
+      {!isLoading && error && <Card className="mb-4 border-amber-200 bg-amber-50">
+        <CardContent className="py-4">
+          <div role="alert" className="text-sm text-amber-900">
+            <p className="font-medium">{hasCurrentData ? 'Could not refresh incidents.' : 'Could not load incidents.'}</p>
+            {hasCurrentData
+              ? <p className="mt-1">Showing the last successful response for this filter from {lastUpdated.toLocaleString()}.
+                {incidents.length === 0 && ' That response contained no matching incidents; current results are unknown.'}</p>
+              : <p className="mt-1">Incident results for this filter are unavailable. Try again to check the current state.</p>}
+          </div>
+          <Button className="mt-3" variant="outline" size="sm" onClick={() => reload()} disabled={refreshing}>
+            {refreshing ? 'Retrying incidents...' : 'Retry incidents'}
+          </Button>
+        </CardContent>
+      </Card>}
+
+      {!isLoading && !error && hasCurrentData && incidents.length === 0 && (
         <Card>
           <CardContent className="pt-6 flex flex-col items-center text-center py-12">
             <ShieldCheck className="h-8 w-8 text-slate-300 mb-3" />
-            <p className="text-slate-700 font-medium">No {filter || ''} incidents</p>
+            <p className="text-slate-700 font-medium">{filter ? `No ${filter} incidents` : 'No incidents'}</p>
             <p className="text-sm text-slate-500 mt-1">
               Guardian raises an incident when a detector finds a cost, reliability, or PII
-              anomaly in your Langfuse traces.
+              anomaly in your captured observations.
             </p>
           </CardContent>
         </Card>

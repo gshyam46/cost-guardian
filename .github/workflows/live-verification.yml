@@ -1,0 +1,87 @@
+name: Opt-in live verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      allow_paid_test_traffic:
+        description: Authorize one paid Founder workload and writes to dedicated test Mongo/Langfuse
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: guardian-live-verification
+  cancel-in-progress: false
+
+jobs:
+  live:
+    if: inputs.allow_paid_test_traffic && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Configure this environment with a default-branch restriction and required
+    # reviewers before adding credentials. Ordinary CI never references it.
+    environment: guardian-verification
+    env:
+      PYTHON_DOTENV_DISABLED: "1"
+      LITELLM_LOCAL_MODEL_COST_MAP: "True"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.13"
+      - name: Install separate application environments
+        run: |
+          python -m venv apps/guardian/backend/.venv
+          python -m venv apps/founder-app/backend/.venv
+          apps/guardian/backend/.venv/bin/python -m pip install -r apps/guardian/backend/requirements.txt -c apps/guardian/backend/requirements.constraints.txt
+          apps/founder-app/backend/.venv/bin/python -m pip install -r apps/founder-app/backend/requirements.txt -c apps/founder-app/backend/requirements.constraints.txt
+          apps/guardian/backend/.venv/bin/python -m pip check
+          apps/founder-app/backend/.venv/bin/python -m pip check
+      - name: Write dedicated environment files without logging values
+        env:
+          FOUNDER_VERIFY_ENV: ${{ secrets.FOUNDER_VERIFY_ENV }}
+          GUARDIAN_VERIFY_ENV: ${{ secrets.GUARDIAN_VERIFY_ENV }}
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          target = Path(os.environ["RUNNER_TEMP"]) / "guardian-verification"
+          target.mkdir(mode=0o700, exist_ok=True)
+          for app in ("founder", "guardian"):
+              value = os.environ.get(app.upper() + "_VERIFY_ENV", "")
+              if not value.strip():
+                  raise SystemExit("Dedicated verification environment secret is missing")
+              path = target / (app + ".env")
+              fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+              with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                  stream.write(value)
+      - name: Verify real source ingestion and authenticated localhost HTTP
+        run: >-
+          python tools/verify_mvp.py live --allow-live
+          --founder-python apps/founder-app/backend/.venv/bin/python
+          --guardian-python apps/guardian/backend/.venv/bin/python
+          --founder-env "${{ runner.temp }}/guardian-verification/founder.env"
+          --guardian-env "${{ runner.temp }}/guardian-verification/guardian.env"
+          --timeout 900 --poll-timeout 120
+          --report tools/reports/live.json
+      - name: Remove temporary credentials
+        if: always()
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          target = Path(os.environ["RUNNER_TEMP"]) / "guardian-verification"
+          for name in ("founder.env", "guardian.env"):
+              (target / name).unlink(missing_ok=True)
+      - name: Save sanitized verification evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: live-verification
+          path: tools/reports/live.json
+          retention-days: 14

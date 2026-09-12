@@ -2,6 +2,8 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from ..models import TraceMetric
+
 
 @dataclass
 class DetectorResult:
@@ -21,3 +23,24 @@ class DetectorResult:
     summary: str = ""
     evidence: Dict[str, Any] = field(default_factory=dict)
     agent_name: Optional[str] = None
+    observation_ids: List[str] = field(default_factory=list)
+    source: str = "langfuse"
+    project_id: Optional[str] = None
+    rule_version: str = "1"
+    finding_kind: str = "anomaly"
+
+
+def observation_identity(candidate: TraceMetric, finding_kind: str, rule_version: str) -> dict:
+    """Carry source identity separately from changing presentation/evidence.
+
+    Hand-built legacy candidates can lack an observation ID. The engine retains
+    an explicitly coarser trace/agent fallback for those callers; production
+    normalization requires an actual source observation ID.
+    """
+    return {
+        "observation_ids": [candidate.observation_id] if candidate.observation_id else [],
+        "source": candidate.source,
+        "project_id": candidate.project_id,
+        "rule_version": rule_version,
+        "finding_kind": finding_kind,
+    }

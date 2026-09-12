@@ -19,12 +19,15 @@ export const LineChart = ({ points, label, formatValue = (v) => v, color = '#0f1
   const width = 480;
   const height = 96;
   const padding = 4;
-  const values = points.map((p) => p.value);
+  const known = (value) => typeof value === 'number' && Number.isFinite(value);
+  const values = points.map((p) => p.value).filter(known);
+  if (values.length === 0) return <EmptyState label={label} />;
   const max = Math.max(...values);
   const min = Math.min(...values);
   const range = max - min || 1;
 
   const coords = points.map((point, i) => {
+    if (!known(point.value)) return null;
     const x = points.length === 1
       ? width / 2
       : padding + (i * (width - padding * 2)) / (points.length - 1);
@@ -32,13 +35,13 @@ export const LineChart = ({ points, label, formatValue = (v) => v, color = '#0f1
     return { x, y, ...point };
   });
 
-  const path = coords.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x} ${c.y}`).join(' ');
+  const path = coords.map((c, i) => c ? `${i === 0 || !coords[i - 1] ? 'M' : 'L'} ${c.x} ${c.y}` : '').join(' ');
 
   return (
     <div>
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-24" preserveAspectRatio="none">
         <path d={path} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" />
-        {coords.map((c) => (
+        {coords.filter(Boolean).map((c) => (
           <circle key={c.label} cx={c.x} cy={c.y} r="2.5" fill={color} />
         ))}
       </svg>
@@ -56,7 +59,8 @@ export const LineChart = ({ points, label, formatValue = (v) => v, color = '#0f1
 export const BarChart = ({ points, label }) => {
   if (!points || points.length === 0) return <EmptyState label={label} />;
 
-  const max = Math.max(...points.map((p) => p.value), 1);
+  const peak = Math.max(...points.map((p) => p.value), 0);
+  const scale = peak || 1;
 
   return (
     <div>
@@ -65,14 +69,14 @@ export const BarChart = ({ points, label }) => {
           <div key={point.label} className="flex-1 flex flex-col justify-end" title={`${point.label}: ${point.value}`}>
             <div
               className="bg-slate-800 rounded-sm min-h-[2px]"
-              style={{ height: `${(point.value / max) * 100}%` }}
+              style={{ height: `${(point.value / scale) * 100}%` }}
             />
           </div>
         ))}
       </div>
       <div className="flex justify-between text-xs text-slate-500 mt-1">
         <span>{points[0].label}</span>
-        <span className="text-slate-400">peak {max}</span>
+        <span className="text-slate-400">peak {peak}</span>
         <span>{points[points.length - 1].label}</span>
       </div>
     </div>

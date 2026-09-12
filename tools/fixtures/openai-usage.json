@@ -1,0 +1,23 @@
+[
+  {"name":"responses_totals","api":"responses","response":{"usage":{"input_tokens":20,"output_tokens":5,"total_tokens":25}},"expected":{"input_tokens":20,"output_tokens":5,"total_tokens":25}},
+  {"name":"chat_totals","api":"chat_completions","response":{"usage":{"prompt_tokens":8,"completion_tokens":2,"total_tokens":10}},"expected":{"input_tokens":8,"output_tokens":2,"total_tokens":10}},
+  {"name":"zero_is_known","api":"responses","response":{"usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}},"expected":{"input_tokens":0,"output_tokens":0,"total_tokens":0}},
+  {"name":"absent_is_unknown","api":"responses","response":{},"expected":{"input_tokens":null,"output_tokens":null,"total_tokens":null}},
+  {"name":"null_is_unknown","api":"chat_completions","response":{"usage":null},"expected":{"input_tokens":null,"output_tokens":null,"total_tokens":null}},
+  {"name":"checked_sum","api":"responses","response":{"usage":{"input_tokens":4,"output_tokens":7}},"expected":{"input_tokens":4,"output_tokens":7,"total_tokens":11}},
+  {"name":"total_only","api":"responses","response":{"usage":{"total_tokens":9}},"expected":{"input_tokens":null,"output_tokens":null,"total_tokens":9}},
+  {"name":"partial_input","api":"chat_completions","response":{"usage":{"prompt_tokens":4,"total_tokens":9}},"expected":{"input_tokens":4,"output_tokens":null,"total_tokens":9}},
+  {"name":"inconsistent_sum","api":"responses","response":{"usage":{"input_tokens":4,"output_tokens":7,"total_tokens":12}},"expected":{"input_tokens":null,"output_tokens":null,"total_tokens":null}},
+  {"name":"boolean_is_not_count","api":"responses","response":{"usage":{"input_tokens":true,"output_tokens":7}},"expected":{"input_tokens":null,"output_tokens":null,"total_tokens":null}},
+  {"name":"string_is_not_count","api":"chat_completions","response":{"usage":{"prompt_tokens":"4","completion_tokens":7}},"expected":{"input_tokens":null,"output_tokens":null,"total_tokens":null}},
+  {"name":"fraction_is_not_count","api":"responses","response":{"usage":{"input_tokens":1.5,"output_tokens":7}},"expected":{"input_tokens":null,"output_tokens":null,"total_tokens":null}},
+  {"name":"negative_is_not_count","api":"responses","response":{"usage":{"input_tokens":-1,"output_tokens":7}},"expected":{"input_tokens":null,"output_tokens":null,"total_tokens":null}},
+  {"name":"sum_overflow","api":"responses","response":{"usage":{"input_tokens":9007199254740991,"output_tokens":1}},"expected":{"input_tokens":null,"output_tokens":null,"total_tokens":null}},
+  {"name":"max_total","api":"responses","response":{"usage":{"total_tokens":9007199254740991}},"expected":{"input_tokens":null,"output_tokens":null,"total_tokens":9007199254740991}},
+  {"name":"partial_greater_than_total","api":"responses","response":{"usage":{"input_tokens":10,"total_tokens":9}},"expected":{"input_tokens":null,"output_tokens":null,"total_tokens":null}},
+  {"name":"subsets_are_not_added","api":"responses","response":{"usage":{"input_tokens":20,"output_tokens":5,"input_tokens_details":{"cached_tokens":10,"cache_write_tokens":2},"output_tokens_details":{"reasoning_tokens":3}}},"expected":{"input_tokens":20,"output_tokens":5,"total_tokens":25}},
+  {"name":"cache_cannot_exceed_input","api":"chat_completions","response":{"usage":{"prompt_tokens":8,"completion_tokens":2,"prompt_tokens_details":{"cached_tokens":9}}},"expected":{"input_tokens":null,"output_tokens":null,"total_tokens":null}},
+  {"name":"reasoning_cannot_exceed_output","api":"responses","response":{"usage":{"input_tokens":8,"output_tokens":2,"output_tokens_details":{"reasoning_tokens":3}}},"expected":{"input_tokens":null,"output_tokens":null,"total_tokens":null}},
+  {"name":"subset_cannot_exceed_known_total","api":"responses","response":{"usage":{"total_tokens":5,"input_tokens_details":{"cached_tokens":6}}},"expected":{"input_tokens":null,"output_tokens":null,"total_tokens":null}},
+  {"name":"unsupported_details_ignored","api":"responses","response":{"usage":{"input_tokens":8,"output_tokens":2,"unsupported_private_detail":"private-source-canary"}},"expected":{"input_tokens":8,"output_tokens":2,"total_tokens":10}}
+]

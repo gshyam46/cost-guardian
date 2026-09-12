@@ -11,9 +11,10 @@ import re
 from typing import List
 
 from ..models import TraceMetric
-from .base import DetectorResult
+from .base import DetectorResult, observation_identity
 
 NAME = "pii"
+RULE_VERSION = "1"
 
 PII_PATTERNS = {
     "email": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
@@ -51,6 +52,7 @@ def evaluate(baseline: List[TraceMetric], candidates: List[TraceMetric]) -> List
                 summary=f"Detected {', '.join(found)} pattern(s) in agent output.",
                 evidence={"pii_types": found},
                 agent_name=candidate.agent_name,
+                **observation_identity(candidate, "pii_pattern", RULE_VERSION),
             )
         )
 

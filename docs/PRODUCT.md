@@ -1,84 +1,88 @@
-# Cost Guardian — Product
+# Cost Guardian: product direction
 
-## What this is not
+Updated 2026-09-11. This defines intended behavior; [PROGRESS.md](PROGRESS.md) describes what exists.
 
-Not another LLM observability platform. Langfuse, Helicone, and similar tools already
-solve trace capture, token/cost accounting, latency, and trace exploration well. Cost
-Guardian does not compete with that layer — it sits on top of it.
+## Customer and problem
 
-## What this is
+Serve teams shipping AI SaaS, RAG and agent workflows, including teams without telemetry or observability. A founder/engineering lead buys; an engineer investigates; a product owner needs customer-impact evidence. First partners should own a deployed application, have access to its server code/integration settings, and experience recurring cost or reliability problems.
 
-A plug-and-play **AI reliability / incident-intelligence layer** for early-stage AI
-startups: founders and small engineering teams who already have (or can trivially add)
-observability, but don't have the bandwidth to constantly interpret it.
+Start with a small tested integration set. “Any AI team can benefit” describes the market, not universal provider/framework support on day one. A team unable to instrument or export telemetry cannot receive workflow monitoring by entering a URL or provider key alone.
 
-Positioning: *"You already have observability. Cost Guardian helps you understand it."*
+Customer jobs:
 
-```
-Application → existing telemetry (Langfuse/OTel/logs) → Cost Guardian → detection →
-correlation → incident intelligence → engineer/founder
-```
+- Distinguish spend growth caused by traffic, model changes, larger context, retries or inefficient workflows.
+- Learn about important failures without watching dashboards.
+- Identify affected workflows/environments and investigate with evidence.
+- Verify mitigation at comparable traffic and workload mix.
+- Obtain this capability without operating an observability stack.
 
-## The core loop it should eventually answer
+## Promise and activation
 
-1. What is happening?
-2. Is something actually wrong?
-3. Why is it probably happening?
-4. What should the engineer investigate next?
+**Know which AI workflows need attention, understand the evidence, and verify the improvement.**
 
-## Signals are not the product
+Proposed activation target: a developer on a supported stack sees a real workflow within 15 minutes, without a Langfuse account. This is a beta measurement target, not a guarantee. Test-event receipt, real traffic, and sufficient baseline history are separate milestones.
 
-Four unrelated metric alerts (latency ↑, tokens ↑, quality ↓, retrieval latency ↑) are
-noise. The differentiated value is **correlating them into one incident with a
-timeline**:
-
-> "AI workflow regression beginning shortly after deployment X; context size increased
-> significantly, retrieval latency increased, and the affected behavior is concentrated
-> in workflow Y."
-
-`signal → correlation → incident → investigation → evidence-backed explanation` is the
-real roadmap. The MVP only builds the first step (signal → incident) with deterministic
-detectors; correlation and investigation are staged for after the MVP proves the
-detectors themselves are reliable enough to trust.
-
-## MVP detector scope (deliberately narrow)
-
-| Detector | Why this one, now | Deferred alternative |
+| Setup path | Customer does | Guardian owns |
 |---|---|---|
-| Cost/token anomaly | Statistical, no ground-truth-label problem, cheap, directly maps to "cost where high, calls drift" | — |
-| Reliability anomaly (latency/error rate) | Same — statistical, deterministic, no label problem | Quality/hallucination scoring (needs an evaluation method — real research question, not solved by a regex) |
-| PII detection | Regex against known formats (email/phone/SSN/card) is precise and has a testable ground truth | Prompt injection — heuristic keyword matching is high-false-positive and not reliably evaluable without a labeled adversarial-prompt corpus. Picked PII first per the "choose the more reliable/evaluable first implementation" constraint; injection detection is next, once there's a benchmark to grade it against |
+| Start monitoring, no telemetry | Creates project, chooses integration, adds scoped configuration/instrumentation, tests, runs app | Ingestion, backing telemetry provisioning, validation, retention and health |
+| Connect existing Langfuse | Selects host/region, supplies project credentials securely, maps workflow/environment | Diagnostics, safe import/backfill, baseline readiness and incident workflow |
 
-Hallucination and context-loss heuristics from the old `observability/` module are
-**not** in the MVP — they need an evaluation methodology (what's "ground truth" for a
-hallucination?) before they're worth shipping as a claim, not just a heuristic.
+Both reach the same product. Managed capture may use Langfuse internally without requiring the customer to operate it. Customers without Langfuse need useful evidence in Guardian's authenticated UI; an inaccessible external trace link is not a complete experience. See [ONBOARDING.md](ONBOARDING.md).
 
-## Future: Agentic SRE investigator (explicitly not in MVP)
+## Private beta scope
 
-A later phase may add an AI agent that, once a deterministic detector raises an
-incident, investigates by querying traces, logs, deployments, GitHub diffs, and prior
-incidents — and must separate **observed facts** from **correlations** from
-**hypotheses**, with evidence, never fabricating a root cause. This requires the
-incident data model and detector outputs (Phase 3) to exist first, since the
-investigator's job is to explain an incident, not to generate more of them.
+| Capability | Required behavior | Current state |
+|---|---|---|
+| Managed onboarding | Tested Python and JavaScript/TypeScript paths, including a RAG example | Absent |
+| Trusted costs | Coverage labels, known/unknown pricing, replay-safe totals, workflow attribution | Partial; defects identified |
+| Cost policy | Absolute budget/burn thresholds plus evaluated relative-change detection | Per-call, per-agent z-score only |
+| Reliability | Terminal workflow outcome, recovered retries, grouped error-rate/latency policy | Every failed generation is a high-severity candidate |
+| RAG visibility | Workflow, retrieval timing/count, embedding usage/cost where known, generation, application outcome | Only generations consumed |
+| Response | Reliable notification, owner, acknowledge/snooze/resolve, runbook and recovery check | List/detail/manual resolve |
+| Feedback | Useful/noisy/expected-change reason and action | Absent |
+| Access/privacy | Named users, roles, scoped keys, content defaults, retention/export/delete | Shared key; output previews |
+| Operations | Source freshness, ingestion lag/rejections, restore and support path | Basic API liveness and some stale-read UI |
 
-## Research framing (intentionally not locked)
+RAG operational health is different from answer correctness. Fast or nonempty retrieval does not establish groundedness. Quality evaluation needs a dataset, scoring method and feedback.
 
-This project doubles as a research platform, not just a product. Candidate directions
-to actually investigate against literature once the MVP produces real incident data:
+## End-to-end journey
 
-- Agent-assisted incident diagnosis for AI/LLM applications
-- Anomaly detection specifically for AI-application telemetry (vs. generic APM, where
-  token/cost/context-window signals don't have established baselines)
-- Multi-signal correlation (cost + latency + quality + context) into a single incident
-- Runtime behavioral signals for detecting AI agent failures (loops, repeated tool
-  calls, context blowup)
+1. Evaluate supported integrations, limits, data handling, pricing basis and a labelled sample incident.
+2. Finish one setup path; receive specific, actionable errors.
+3. See real traffic, freshness, field coverage and detector warm-up.
+4. Set important workflows, environment, budget/latency policy, owner and destination.
+5. Receive a grouped incident with impact, confidence/coverage and evidence.
+6. Compare baseline/current windows, attempts and retrieval; follow a short investigation guide.
+7. Record mitigation or expected-change dismissal; no automatic customer-system modifications.
+8. Verify post-change outcomes; show recovery pending when traffic is insufficient.
+9. Review weekly outcomes; manage keys, retention, export, cancellation and deletion.
 
-The final research question should come out of what the MVP's real incident data
-actually looks like, not be picked in advance.
+## Measure value
 
-## Target user
+- Activation: started setups reaching real attributed traffic and a tested notification destination; split by setup path/integration.
+- Time to first value: setup start to correctly attributed real workflow; measure test receipt and baseline readiness separately.
+- Usefulness: actionable / reviewed incidents, with sample size and review window.
+- Noise: non-actionable notifications per project/week, including repeated and incorrectly grouped events.
+- Response: upstream availability to detection, delivery, acknowledgement, mitigation and verified recovery.
+- Retention: ongoing production telemetry plus useful actions over successive weeks; visits alone are insufficient.
+- Business value: confirmed mitigations and cost per successful workflow before/after, with traffic/model-mix caveats.
 
-Seed / early-Series-A AI startups, small eng teams, no dedicated SRE or AI-reliability
-function. They're already shipping an AI product; they are not staffed to watch
-dashboards.
+Cost per successful workflow needs an application-defined terminal outcome. Do not infer success from absence of an ERROR span. Include observed failed attempts and embedding/tool charges, and disclose excluded infrastructure/external charges. Without outcomes, show cost per observed run and outcome coverage. Observed costs are telemetry-derived, not an invoice reconciliation service.
+
+Define the initial efficiency metric explicitly: spend on finalized workflows (successful and failed, including their attempts) divided by successful workflow completions in the same cohort/window. Report pending/unknown-outcome workflows and unpriced observations separately. If there are no successful completions, the metric is unavailable, not zero. Show spend on successful runs alone as a separate measure when useful. This prevents failed work from disappearing from the economics.
+
+## Positioning and commercial discovery
+
+Native alerts already exist in [Langfuse](https://langfuse.com/docs/observability/features/alerts) and [Helicone](https://docs.helicone.ai/features/alerts). Guardian must demonstrate a better setup-to-action experience. The code does not yet establish that advantage.
+
+Conduct 8-10 problem interviews and recruit three design partners spanning AI SaaS, RAG and agent workflows. Ask about their last incident, current tools, time spent, buyer and missing information. Observe setup/investigation, and compare with native alert configuration. These interviews are planned; none were conducted in this review.
+
+Test subscription per workspace with an observation allowance and transparent caps/overages. Price, allowance and margin remain open. Avoid incident-based pricing, which rewards noise. Track storage, upstream API, ingestion compute, delivery and support costs; include inference costs if an investigator is later added. Managed telemetry can materially change economics. Manual invoicing can serve pilots before automated billing.
+
+If partners only need thresholds, refine the onboarding offer or narrow to a demonstrated workflow/RAG problem. If repeated value does not emerge, pause platform expansion.
+
+Initial distribution is founder-led: recruit through existing engineering relationships and relevant AI-builder communities, publish a realistic supported-stack setup walkthrough and a measured incident case study with permission, and invite teams with a recent recurring problem into an assisted pilot. Recruitment and messages require the founder's execution/authorization; none were sent during this review. Track qualified conversation -> setup started -> real traffic -> useful action -> paid continuation. Avoid paid acquisition until activation and continued usefulness are demonstrated. A broad “AI tools” audience is not a substitute for a buyer with an immediate problem.
+
+## Boundaries
+
+The initial product provides asynchronous monitoring and guided response. It cannot guarantee overspend prevention, leak prevention or hallucination detection. Existing regex PII is experimental pattern matching, not proof of a leak or compliance. Target content scanning is optional and off by default. Research and AI investigation follow reliable data and customer validation. Founder Niche Discovery stays a test workload.

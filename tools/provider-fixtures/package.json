@@ -1,0 +1,10 @@
+{
+  "name": "guardian-provider-sdk-fixtures",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Isolated development dependency for localhost provider compatibility checks",
+  "devDependencies": {
+    "openai": "7.15.0"
+  }
+}

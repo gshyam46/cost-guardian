@@ -1,9 +1,4 @@
-"""Guardian's own MongoDB connection.
-
-Separate from any monitored application's database layer -- Guardian owns the
-`guardian_incidents`, `guardian_metrics` and `guardian_state` collections and nothing
-else.
-"""
+"""Guardian owns its incident, metric, observation ledger, state and identity collections."""
 import logging
 
 from motor.motor_asyncio import AsyncIOMotorClient

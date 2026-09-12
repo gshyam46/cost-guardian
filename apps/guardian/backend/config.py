@@ -1,8 +1,8 @@
 """Cost Guardian configuration.
 
 Guardian is a standalone service. It shares no code and no process with the
-applications it monitors -- it only reads their telemetry out of Langfuse. That means
-it needs its own database handle, its own auth, and its own port.
+applications it monitors. It reads Langfuse or accepts scoped terminal events in
+direct mode, with its own database, authentication and port.
 """
 import os
 from pathlib import Path
@@ -24,25 +24,21 @@ PORT = int(os.environ.get("GUARDIAN_PORT", "8001"))
 CORS_ORIGINS = os.environ.get("GUARDIAN_CORS_ORIGINS", "http://localhost:3001").split(",")
 
 # --- Auth ---------------------------------------------------------------------
-# Guardian used to piggyback on the monitored app's session cookies, which only worked
-# because they shared a process. As its own service it needs its own credential. A
-# single static API key is deliberate for the MVP: Guardian is currently single-tenant
-# ("watch my own stack"). Real multi-tenancy needs per-project keys -- tracked in
-# docs/PHASES.md, not forgotten.
+# Legacy local-development access. identity/settings.py owns named OIDC access;
+# capture/settings.py owns source mode. Direct intake uses separate write-only
+# credentials and requires an isolated named project. See docs/CAPTURE.md.
 GUARDIAN_API_KEY = os.environ.get("GUARDIAN_API_KEY", "")
 
 # --- Worker -------------------------------------------------------------------
-# How often the worker asks Langfuse for new generations. 60s is the sane default for
-# a real deployment; a live demo wants it lower so the dashboard reacts while someone
-# is still watching it.
-#
-# There is a hard floor, though, and it is not ingestion lag: Langfuse Cloud allows 15
-# API requests/minute for the entire project, and the dashboard's live views draw on
-# the same allowance. A worker polling every 15s can spend half that budget on its own
-# and push the dashboard into 429s. 30s is the lowest value that leaves room for both.
+# Development polling default. Source quotas depend on endpoint, plan and
+# organization; the worker and dashboard both consume that allowance. Verify the
+# deployed source limits and ingestion delay before changing this interval.
 POLL_INTERVAL_SECONDS = int(os.environ.get("GUARDIAN_POLL_INTERVAL_SECONDS", "60"))
+# Stable single-connection identity; retain during credential rotation.
+GUARDIAN_CONNECTION_ID = os.environ.get("GUARDIAN_CONNECTION_ID", "primary")
 
 # --- Langfuse (the telemetry source Guardian reads) ----------------------------
 LANGFUSE_PUBLIC_KEY = os.environ.get("LANGFUSE_PUBLIC_KEY", "")
 LANGFUSE_SECRET_KEY = os.environ.get("LANGFUSE_SECRET_KEY", "")
 LANGFUSE_HOST = os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com")
+LANGFUSE_READ_API = os.environ.get("LANGFUSE_READ_API", "v2")

@@ -1,70 +1,31 @@
-# Getting Started with Create React App
+# Founder demo frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This frontend belongs to the independent Founder Niche Discovery demo workload. Cost Guardian does not require this app, its authentication or its database to run.
 
-## Available Scripts
+For the product review and implementation plan, start at the [repository README](../../../README.md). The demo is maintained to exercise realistic multi-step LLM telemetry, not as a second launch product.
 
-In the project directory, you can run:
+## Local setup
 
-### `npm start`
+Use Node 24/npm 11. From this directory, in PowerShell:
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+```powershell
+npm.cmd ci
+Copy-Item .env.example .env
+npm.cmd start
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+The backend runs separately on port 8000 with its own Python environment and configuration. The browser authentication flow currently depends on an external Emergent authentication service. Its credentials/availability and a complete browser run were not verified in the 2026-09-11 review.
 
-### `npm test`
+The template sets port 3000 and the public backend URL at port 8000. Keep real secrets on the backend; never put provider credentials into React build variables.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Checks
 
-### `npm run build`
+```powershell
+$env:CI = "true"
+npm.cmd test -- --watchAll=false --runInBand
+npm.cmd run build
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Both a package-lock and a Yarn lockfile exist historically. npm and the tracked package-lock are authoritative; the old Yarn lock is preserved. The 2026-09-11 R0-01 implementation passed a clean npm install, four JSDOM route/session tests and a production build. Tests mock HTTP services and do not prove live OAuth or deployed SPA fallback. Guardian's product evidence is tracked in [VALIDATION.md](../../../docs/VALIDATION.md).
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+Unused template script injection, badge and template-project analytics have been removed. The app's explicit Emergent authentication integration remains. The repaired [verification harness](../../../tools/README.md) runs each backend independently and separates offline evidence from explicitly configured live traffic.

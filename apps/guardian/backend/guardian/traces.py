@@ -1,445 +1,354 @@
-"""Live read model for runs and LLM calls, served straight from Langfuse.
+"""Bounded, coverage-aware live views over the shared source adapter.
 
-Guardian deliberately stores no raw traces -- it owns incidents and hourly rollups,
-and Langfuse remains the system of record for the calls themselves (see
-docs/ARCHITECTURE.md). That decision is what keeps Guardian pointable at any Langfuse
-project, but it left the dashboard with nothing to show between "an incident fired"
-and "go read Langfuse": no call list, no latency per agent, no sense of whether the
-app is even doing anything right now.
-
-This module fills that gap without breaking the decision behind it. Nothing here is
-persisted; every response is assembled on demand from Langfuse and thrown away. If
-Guardian's database were wiped, these views would be unaffected -- which is the test
-for whether we are caching Langfuse's data or merely reading it.
-
-One Langfuse quirk worth knowing: the *analytics* tables behind Langfuse's own UI lag
-by roughly 15 minutes ("New data in ~15 min" in their table headers), but the trace
-and observation APIs used here return a run within seconds of it finishing. A run that
-has not yet surfaced in Langfuse's dashboard is already visible in this one.
+Derived measurements, observation trace context and short content previews are cached.
+A successful traversal describes the source query, not arrival of all delayed
+telemetry or completion of a customer's business workflow.
 """
 import json
 import logging
+import math
 import threading
 import time
+from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, localcontext
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from .langfuse_client import _get, _stringify
+from .normalization import MAX_TOKEN_COUNT, normalize_observation, utc_datetime
 
 logger = logging.getLogger(__name__)
 
-# Langfuse rejects a larger page size with a 400.
 MAX_PAGE_SIZE = 100
-
-# Langfuse Cloud allows 15 requests/minute on the public API and answers 429 past that.
-# That budget is shared with the worker's own polling, so the dashboard cannot simply
-# call through on every refresh: at a 10s refresh over two endpoints it would spend the
-# entire allowance by itself and starve the detector loop.
-#
-# Hence a short TTL cache. This is not a retreat from "Guardian stores no traces" --
-# nothing is written to Guardian's database and the entries evaporate with the process.
-# It only means several dashboard refreshes (or several open tabs) inside one window
-# share a single upstream read.
+MAX_WINDOW_RECORDS = 1000
+MAX_RUN_HOURS = 168
 CACHE_TTL_SECONDS = 20
-
-
-class _TTLCache:
-    """Tiny in-memory cache whose real job is surviving a 429.
-
-    On an upstream failure it returns the last good value marked stale rather than an
-    empty one. That distinction is the whole point: an empty result renders as "your
-    app made no calls", which is a factual claim about the user's system, and it must
-    never be produced by Guardian failing to read its own telemetry source.
-    """
-
-    def __init__(self, ttl_seconds: int = CACHE_TTL_SECONDS) -> None:
-        self._ttl = ttl_seconds
-        self._entries: Dict[str, Tuple[float, Any]] = {}
-        self._lock = threading.Lock()
-
-    def get_or_fetch(self, key: str, fetch: Callable[[], Any]) -> Tuple[Any, bool, Optional[float]]:
-        """Return (value, stale, fetched_at_epoch)."""
-        now = time.time()
-        with self._lock:
-            entry = self._entries.get(key)
-        if entry and now - entry[0] < self._ttl:
-            return entry[1], False, entry[0]
-
-        try:
-            value = fetch()
-        except Exception as e:
-            if entry:
-                logger.warning(f"[Guardian] Langfuse read failed ({e}); serving cached data.")
-                return entry[1], True, entry[0]
-            raise
-
-        with self._lock:
-            self._entries[key] = (now, value)
-        return value, False, now
-
-# Enough of a model's reply to see what it actually said, without shipping a 10KB JSON
-# document per call into a table the user is scanning.
+MAX_CACHE_ENTRIES = 64
+MAX_STALE_SECONDS = 300
 OUTPUT_PREVIEW_CHARS = 400
 
 
-def _level_to_status(obs: Any) -> str:
-    level = _get(obs, "level", default="DEFAULT")
-    level = getattr(level, "value", level)
-    return "error" if str(level).upper() == "ERROR" else "success"
+class LiveReadError(RuntimeError):
+    """The source could not establish a usable result (HTTP 503, not 404)."""
 
 
-def _tokens(obs: Any) -> Dict[str, int]:
-    """Token counts split in/out. Langfuse exposes these three different ways
-    depending on SDK version and how the call was instrumented, so try each."""
-    details = _get(obs, "usageDetails", "usage_details")
-    if isinstance(details, dict):
-        return {
-            "input": int(details.get("input") or 0),
-            "output": int(details.get("output") or 0),
-            "total": int(details.get("total") or 0),
-        }
+class _TTLCache:
+    """Bounded cache with serialized fills and limited stale-on-failure retention."""
 
-    usage = _get(obs, "usage")
-    if usage is not None:
-        inp = _get(usage, "input", "prompt_tokens", default=0) or 0
-        out = _get(usage, "output", "completion_tokens", default=0) or 0
-        total = _get(usage, "total", default=None)
-        try:
-            inp, out = int(inp), int(out)
-            return {"input": inp, "output": out, "total": int(total) if total else inp + out}
-        except (TypeError, ValueError):
-            pass
+    def __init__(self, ttl_seconds=CACHE_TTL_SECONDS, max_entries=MAX_CACHE_ENTRIES,
+                 max_stale_seconds=MAX_STALE_SECONDS):
+        self._ttl = ttl_seconds
+        self._max_entries = max_entries
+        self._max_stale = max_stale_seconds
+        self._entries = OrderedDict()
+        self._lock = threading.Lock()
 
-    inp = int(_get(obs, "promptTokens", "prompt_tokens", default=0) or 0)
-    out = int(_get(obs, "completionTokens", "completion_tokens", default=0) or 0)
-    return {"input": inp, "output": out, "total": inp + out}
-
-
-def _cost(obs: Any) -> float:
-    cost = _get(obs, "calculated_total_cost", "total_cost", "totalCost")
-    if cost is None:
-        details = _get(obs, "costDetails", "cost_details")
-        if isinstance(details, dict):
-            cost = details.get("total")
-    try:
-        return float(cost) if cost is not None else 0.0
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def _seconds_to_ms(value: Any) -> float:
-    try:
-        return round(float(value) * 1000, 1)
-    except (TypeError, ValueError):
-        return 0.0
+    def get_or_fetch(self, key: str, fetch: Callable[[], Any]) -> Tuple[Any, bool, Optional[float]]:
+        # One fill at a time bounds concurrent SDK work and avoids cache stampedes.
+        # The API offloads this blocking work; network requests have their own limits.
+        with self._lock:
+            # Expiry measures elapsed process time. UTC wall time is retained
+            # separately for API evidence and must not extend TTL after a clock reset.
+            now = time.monotonic()
+            entry = self._entries.get(key)
+            if entry and now - entry[0] < self._ttl:
+                self._entries.move_to_end(key)
+                return entry[1], False, entry[2]
+            if entry and now - entry[0] >= self._max_stale:
+                del self._entries[key]
+                entry = None
+            try:
+                value = fetch()
+            except Exception as exc:
+                if entry and time.monotonic() - entry[0] < self._max_stale:
+                    logger.warning("Live source refresh failed (%s); serving stale data.", type(exc).__name__)
+                    return entry[1], True, entry[2]
+                self._entries.pop(key, None)
+                raise
+            fetched = time.time()
+            self._entries[key] = (time.monotonic(), value, fetched)
+            self._entries.move_to_end(key)
+            while len(self._entries) > self._max_entries:
+                self._entries.popitem(last=False)
+            return value, False, fetched
 
 
-def _readable_output(raw: Optional[str]) -> Optional[str]:
-    """Unwrap a model response into something a human can skim.
+def _iso(value):
+    normalized = utc_datetime(value)
+    return normalized.isoformat() if normalized else None
 
-    Langfuse stores the output as a JSON envelope, and these agents answer in JSON
-    mode, so the raw value arrives double-encoded: a JSON string holding escaped JSON.
-    Rendered verbatim it is a wall of backslash-n and backslash-u escapes.
 
-    This must happen before the preview is truncated -- doing it in the browser (the
-    first attempt) could never work, because a 400-character slice of a JSON document
-    is not parseable JSON, so every unwrap failed and fell back to the raw text.
-
-    Falls back to the original string at every step: an unreadable rendering of what
-    the model actually said beats a tidy rendering of something it did not.
-    """
+def _readable_output(raw):
     if not raw:
         return raw
     try:
         parsed = json.loads(raw)
     except (TypeError, ValueError):
         return raw
-
     inner = parsed.get("content", parsed) if isinstance(parsed, dict) else parsed
     if not isinstance(inner, str):
-        try:
-            return json.dumps(inner, indent=2, ensure_ascii=False)
-        except (TypeError, ValueError):
-            return raw
-
+        return json.dumps(inner, indent=2, ensure_ascii=False)
     try:
         return json.dumps(json.loads(inner), indent=2, ensure_ascii=False)
     except (TypeError, ValueError):
         return inner
 
 
-def _observation_to_call(obs: Any) -> Optional[Dict[str, Any]]:
-    """One LLM call, flattened for the dashboard."""
-    try:
-        tokens = _tokens(obs)
-        status = _level_to_status(obs)
-        output = _readable_output(_stringify(_get(obs, "output")))
-        return {
-            "id": str(_get(obs, "id", default="")),
-            "trace_id": str(_get(obs, "trace_id", "traceId", default="")),
-            "agent_name": str(_get(obs, "name", default="unknown")),
-            "model": str(_get(obs, "model", default="unknown")),
-            "status": status,
-            # Langfuse only populates status_message on failures; it carries the
-            # provider's actual error text, which is the single most useful field on
-            # this whole screen when something breaks.
-            "status_message": _stringify(_get(obs, "status_message", "statusMessage")),
-            "started_at": _iso(_get(obs, "start_time", "startTime")),
-            "latency_ms": _seconds_to_ms(_get(obs, "latency")),
-            "time_to_first_token_ms": _seconds_to_ms(
-                _get(obs, "time_to_first_token", "timeToFirstToken")
-            ),
-            "input_tokens": tokens["input"],
-            "output_tokens": tokens["output"],
-            "total_tokens": tokens["total"],
-            "cost_usd": _cost(obs),
-            "output_preview": (output or "")[:OUTPUT_PREVIEW_CHARS],
-            "output_truncated": bool(output and len(output) > OUTPUT_PREVIEW_CHARS),
-        }
-    except Exception as e:
-        logger.warning(f"[Guardian] Skipping unparseable observation for traces view: {e}")
-        return None
+def _metric_to_call(metric):
+    output = _readable_output(metric.output_text)
+    return {
+        "id": metric.observation_id,
+        "trace_id": metric.trace_id,
+        "agent_name": metric.agent_name,
+        "model": metric.model,
+        "status": metric.status,
+        "completion_state": metric.completion_state,
+        "status_message": metric.status_message[:OUTPUT_PREVIEW_CHARS] if metric.status_message else None,
+        "status_message_truncated": bool(metric.status_message and len(metric.status_message) > OUTPUT_PREVIEW_CHARS),
+        "started_at": _iso(metric.timestamp),
+        "latency_ms": metric.latency_ms,
+        "time_to_first_token_ms": metric.time_to_first_token_ms,
+        "input_tokens": metric.input_tokens,
+        "output_tokens": metric.output_tokens,
+        "total_tokens": metric.total_tokens,
+        "cost_usd": metric.cost_usd,
+        "cost_usd_decimal": metric.cost_usd_decimal,
+        "normalization_issues": list(metric.normalization_issues),
+        "output_preview": (output or "")[:OUTPUT_PREVIEW_CHARS],
+        "output_truncated": bool(output and len(output) > OUTPUT_PREVIEW_CHARS),
+    }
 
 
-def _iso(value: Any) -> Optional[str]:
-    if isinstance(value, datetime):
-        return value.isoformat()
-    return str(value) if value else None
+def _observation_to_call(obs):
+    """Compatibility entry point; all field normalization remains shared."""
+    result = normalize_observation(obs)
+    return _metric_to_call(result.metric) if result.metric is not None else None
+
+
+def _coverage(result, scope="window_generations"):
+    return {
+        "scope": scope,
+        "status": result.status,
+        "window_start": _iso(result.window_start),
+        "window_end": _iso(result.window_end),
+        "fetched_at": _iso(result.fetched_at),
+        "observed_count": len(result.metrics),
+        "records_read": result.records_read,
+        "invalid_count": result.invalid_count,
+        "duplicate_count": result.duplicate_count,
+        "pages_fetched": result.pages_fetched,
+        "max_records": MAX_WINDOW_RECORDS,
+        "max_pages": math.ceil(MAX_WINDOW_RECORDS / MAX_PAGE_SIZE),
+        "truncated": result.error_code in {"limit_reached", "page_limit_reached"},
+        "reason": result.error_code,
+        "issues": dict(result.issues),
+        "next_page": result.next_page,
+        "has_more": bool(getattr(result, "next_cursor", None) or result.next_page),
+    }
+
+
+def _summary(calls):
+    priced = [c for c in calls if c["cost_usd"] is not None]
+    tokenized = [c for c in calls if c["total_tokens"] is not None]
+    timed = [c["latency_ms"] for c in calls if c["latency_ms"] is not None]
+    with localcontext() as context:
+        context.prec = 1024
+        known_cost = sum(
+            (Decimal(c.get("cost_usd_decimal") or str(c["cost_usd"])) for c in priced),
+            Decimal(0),
+        )
+        mean = float(sum((Decimal(str(v)) for v in timed), Decimal(0)) / len(timed)) if timed else None
+    cost_value = float(known_cost)
+    aggregate_issues = []
+    if not math.isfinite(cost_value):
+        cost_value = None
+        aggregate_issues.append("cost_total_out_of_range")
+    known_tokens = sum(c["total_tokens"] for c in tokenized)
+    if known_tokens > MAX_TOKEN_COUNT:
+        known_tokens = None
+        aggregate_issues.append("tokens_total_out_of_range")
+    return {
+        "call_count": len(calls),
+        "error_count": sum(c["status"] == "error" for c in calls),
+        "unknown_status_count": sum(c["status"] not in ("success", "error") for c in calls),
+        "total_cost_usd": cost_value if len(priced) == len(calls) else None,
+        "known_cost_usd": cost_value,
+        "known_cost_usd_decimal": format(known_cost, "f"),
+        "aggregate_issues": aggregate_issues,
+        "cost_known_count": len(priced),
+        "cost_unknown_count": len(calls) - len(priced),
+        "total_tokens": known_tokens if len(tokenized) == len(calls) else None,
+        "known_total_tokens": known_tokens,
+        "tokens_known_count": len(tokenized),
+        "tokens_unknown_count": len(calls) - len(tokenized),
+        "latency_known_count": len(timed),
+        "latency_unknown_count": len(calls) - len(timed),
+        "avg_latency_ms": round(mean, 1) if mean is not None else None,
+        "p95_latency_ms": sorted(timed)[math.ceil(len(timed) * .95) - 1] if timed else None,
+    }
+
+
+def _stats_from(calls, hours):
+    stats = _summary(calls)
+    stats["window_hours"] = hours
+    stats["last_call_at"] = max((c["started_at"] for c in calls), default=None)
+    for field, output in (("agent_name", "by_agent"), ("model", "by_model")):
+        buckets = {}
+        for call in calls:
+            buckets.setdefault(call[field], []).append(call)
+        rows = []
+        for name, values in buckets.items():
+            row = _summary(values)
+            rows.append({
+                **row, "name": name, "calls": row["call_count"], "errors": row["error_count"],
+                "cost_usd": row["total_cost_usd"], "tokens": row["total_tokens"],
+            })
+        stats[output] = sorted(rows, key=lambda r: (r["known_cost_usd"] is not None, r["known_cost_usd"] or 0), reverse=True)
+    return stats
+
+
+def _empty_stats(hours):
+    return _stats_from([], hours)
+
+
+def _trace_context(metrics):
+    """Only explicit context is eligible; conflicting child context stays unknown."""
+    context, issues = {}, []
+    for field in ("trace_name", "user_id", "session_id", "trace_tags"):
+        values = {getattr(metric, field) for metric in metrics if getattr(metric, field)}
+        if len(values) > 1:
+            issues.append("conflicting_" + field)
+        context[field] = next(iter(values)) if len(values) == 1 else None
+    return context, issues
+
+
+def _run_from(trace_id, calls, trace_url, coverage, metrics):
+    summary = _summary(calls)
+    context, context_issues = _trace_context(metrics)
+    state = "observed" if calls else "not_observed" if coverage["status"] == "complete" else "undetermined"
+    if not calls:
+        # Absence in a bounded query is not evidence of free or zero-token activity.
+        for field in ("total_cost_usd", "known_cost_usd", "known_cost_usd_decimal", "total_tokens", "known_total_tokens"):
+            summary[field] = None
+    return {
+        **summary,
+        "id": trace_id,
+        "name": context["trace_name"] or "Trace " + trace_id,
+        "started_at": min((c["started_at"] for c in calls), default=None),
+        "latency_ms": None,  # Child measurements do not establish workflow duration.
+        "cost_usd": summary["total_cost_usd"] if calls else None,
+        "known_cost_usd": summary["known_cost_usd"] if calls else None,
+        "status": "error" if summary["error_count"] else "unknown",
+        "workflow_status": "unknown",
+        "user_id": context["user_id"],
+        "session_id": context["session_id"],
+        "tags": list(context["trace_tags"] or ()),
+        "trace_context_issues": context_issues,
+        "metadata_basis": "observations",
+        "observation_state": state,
+        "langfuse_url": trace_url(trace_id),
+        "agents": list(dict.fromkeys(c["agent_name"] for c in calls)),
+        "coverage": coverage,
+    }
+
+
+def _runs_from(metrics, calls, trace_url, coverage):
+    by_trace = {}
+    for call in calls:
+        by_trace.setdefault(call["trace_id"], []).append(call)
+    metrics_by_trace = {}
+    for metric in metrics:
+        metrics_by_trace.setdefault(metric.trace_id, []).append(metric)
+    runs = [
+        _run_from(trace_id, rows, trace_url, coverage, metrics_by_trace.get(trace_id, []))
+        for trace_id, rows in by_trace.items()
+    ]
+    return sorted(runs, key=lambda r: r["started_at"] or "", reverse=True)
+
 
 class LiveTraceReader:
-    """Read-only views over Langfuse, behind a short TTL cache.
+    """All headlines use the bounded source traversal; feed limits only affect rows."""
 
-    Every dashboard view is derived from at most two upstream reads -- one page of
-    GENERATION observations and one page of traces -- rather than one read per widget.
-    That is a rate-limit requirement, not an optimisation: Langfuse Cloud allows 15
-    requests/minute across the whole project, and Guardian's worker spends from the
-    same budget.
-    """
-
-    def __init__(self, source, ttl_seconds: int = CACHE_TTL_SECONDS):
-        # Takes the existing LangfuseTraceSource so credential handling and the
-        # "no credentials configured" degradation live in exactly one place.
+    def __init__(self, source, ttl_seconds=CACHE_TTL_SECONDS):
         self._source = source
         self._cache = _TTLCache(ttl_seconds)
 
     @property
-    def available(self) -> bool:
+    def available(self):
         return self._source.available
 
-    def _client(self):
-        return self._source.client
-
-    # --- upstream reads (the only methods here that touch the network) ------------
-
-    def _fetch_calls(self, hours: int) -> List[Dict[str, Any]]:
-        response = self._client().fetch_observations(
-            type="GENERATION",
-            from_start_time=datetime.now(timezone.utc) - timedelta(hours=hours),
-            limit=MAX_PAGE_SIZE,
+    def _generations(self, since, until, trace_id=None):
+        result = self._source.fetch_generations(
+            since, until=until, limit=MAX_WINDOW_RECORDS, trace_id=trace_id,
         )
-        calls = [c for c in (_observation_to_call(o) for o in response.data) if c]
-        calls.sort(key=lambda c: c["started_at"] or "", reverse=True)
-        return calls
+        if result.status == "failed":
+            raise LiveReadError(result.error_code or "source_unavailable")
+        return result
 
-    def _fetch_traces(self, limit: int) -> List[Any]:
-        return self._client().fetch_traces(limit=min(limit, MAX_PAGE_SIZE)).data
-
-    # --- derived views -----------------------------------------------------------
-
-    def snapshot(self, hours: int = 24, run_limit: int = 8, call_limit: int = 60) -> Dict[str, Any]:
-        """Everything the live dashboard needs, from one cached pair of reads."""
-        if not self.available:
-            return {
-                "available": False,
-                "reason": "Langfuse credentials are not configured for Guardian.",
-            }
-
-        try:
-            calls, calls_stale, fetched_at = self._cache.get_or_fetch(
-                "calls:%d" % hours, lambda: self._fetch_calls(hours)
-            )
-        except Exception as e:
-            # Nothing cached to fall back on. Say that Guardian could not read, rather
-            # than reporting zero calls -- zero is a claim about the user's system.
-            logger.error("[Guardian] Could not read calls from Langfuse: %s", e)
-            return {
-                "available": True,
-                "degraded": True,
-                "reason": (
-                    "Guardian could not read from Langfuse (it may be rate-limited). "
-                    "Numbers return on the next refresh."
-                ),
-                "stale": False,
-                "fetched_at": None,
-                "stats": _empty_stats(hours),
-                "calls": [],
-                "runs": [],
-            }
-
-        try:
-            raw_traces, traces_stale, _ = self._cache.get_or_fetch(
-                "traces:%d" % run_limit, lambda: self._fetch_traces(run_limit)
-            )
-        except Exception:
-            raw_traces, traces_stale = [], True
-
+    def _fetch_snapshot(self, hours):
+        until = datetime.now(timezone.utc)
+        since = until - timedelta(hours=hours)
+        result = self._generations(since, until)
+        calls = sorted((_metric_to_call(m) for m in result.metrics),
+                       key=lambda c: c["started_at"], reverse=True)
+        coverage = _coverage(result)
         return {
-            "available": True,
-            "degraded": False,
-            "stale": bool(calls_stale or traces_stale),
-            "fetched_at": (
-                datetime.fromtimestamp(fetched_at, tz=timezone.utc).isoformat()
-                if fetched_at
-                else None
-            ),
+            "available": True, "degraded": False,
+            "coverage": coverage,
             "stats": _stats_from(calls, hours),
-            "calls": calls[:call_limit],
-            "runs": _runs_from(raw_traces, calls, self._source.trace_url),
-        }
-
-    def run_detail(self, trace_id: str) -> Optional[Dict[str, Any]]:
-        """One run with every call beneath it, oldest first so it reads as a timeline."""
-        if not self.available:
-            return None
-        try:
-            trace, _, _ = self._cache.get_or_fetch(
-                "trace:%s" % trace_id, lambda: self._client().fetch_trace(trace_id).data
-            )
-        except Exception as e:
-            logger.error("[Guardian] fetch_trace(%s) failed: %s", trace_id, e)
-            return None
-
-        calls = [
-            c
-            for c in (_observation_to_call(o) for o in (_get(trace, "observations") or []))
-            if c
-        ]
-        calls.sort(key=lambda c: c["started_at"] or "")
-        errors = [c for c in calls if c["status"] == "error"]
-
-        return {
-            "id": str(_get(trace, "id", default=trace_id)),
-            "name": str(_get(trace, "name", default="run")),
-            "started_at": _iso(_get(trace, "timestamp")),
-            "latency_ms": _seconds_to_ms(_get(trace, "latency")),
-            "cost_usd": float(_get(trace, "total_cost", "totalCost", default=0) or 0),
-            "total_tokens": sum(c["total_tokens"] for c in calls),
-            "call_count": len(calls),
-            "error_count": len(errors),
-            "status": "error" if errors else "success",
-            "user_id": _get(trace, "user_id", "userId"),
-            "session_id": _get(trace, "session_id", "sessionId"),
-            "tags": list(_get(trace, "tags", default=[]) or []),
-            "langfuse_url": self._source.trace_url(trace_id),
             "calls": calls,
+            "runs": _runs_from(result.metrics, calls, self._source.trace_url, coverage),
+            "metadata_basis": "observations",
         }
 
-
-def _empty_stats(hours: int) -> Dict[str, Any]:
-    return {
-        "window_hours": hours,
-        "call_count": 0,
-        "error_count": 0,
-        "total_cost_usd": 0.0,
-        "total_tokens": 0,
-        "avg_latency_ms": 0.0,
-        "p95_latency_ms": 0.0,
-        "by_agent": [],
-        "by_model": [],
-        "last_call_at": None,
-    }
-
-
-def _stats_from(calls: List[Dict[str, Any]], hours: int) -> Dict[str, Any]:
-    """Headline numbers over exactly the call list the feed renders, so the totals and
-    the rows beneath them can never disagree."""
-    if not calls:
-        return _empty_stats(hours)
-
-    latencies = sorted(c["latency_ms"] for c in calls)
-    errors = [c for c in calls if c["status"] == "error"]
-
-    by_agent: Dict[str, Dict[str, Any]] = {}
-    by_model: Dict[str, Dict[str, Any]] = {}
-    for call in calls:
-        for bucket, key in ((by_agent, call["agent_name"]), (by_model, call["model"])):
-            row = bucket.setdefault(
-                key,
-                {
-                    "name": key,
-                    "calls": 0,
-                    "errors": 0,
-                    "cost_usd": 0.0,
-                    "tokens": 0,
-                    "_latency_sum": 0.0,
-                },
-            )
-            row["calls"] += 1
-            row["errors"] += 1 if call["status"] == "error" else 0
-            row["cost_usd"] += call["cost_usd"]
-            row["tokens"] += call["total_tokens"]
-            row["_latency_sum"] += call["latency_ms"]
-
-    def finish(bucket):
-        rows = []
-        for row in bucket.values():
-            latency_sum = row.pop("_latency_sum")
-            row["avg_latency_ms"] = round(latency_sum / row["calls"], 1) if row["calls"] else 0.0
-            row["cost_usd"] = round(row["cost_usd"], 6)
-            rows.append(row)
-        return sorted(rows, key=lambda r: r["cost_usd"], reverse=True)
-
-    return {
-        "window_hours": hours,
-        "call_count": len(calls),
-        "error_count": len(errors),
-        "total_cost_usd": round(sum(c["cost_usd"] for c in calls), 6),
-        "total_tokens": sum(c["total_tokens"] for c in calls),
-        "avg_latency_ms": round(sum(latencies) / len(latencies), 1),
-        # Index rather than interpolate: at the call volumes this dashboard sees (tens,
-        # not thousands) an interpolated p95 implies precision that is not there.
-        "p95_latency_ms": latencies[min(int(len(latencies) * 0.95), len(latencies) - 1)],
-        "by_agent": finish(by_agent),
-        "by_model": finish(by_model),
-        "last_call_at": calls[0]["started_at"],
-    }
-
-
-def _runs_from(raw_traces, calls, trace_url) -> List[Dict[str, Any]]:
-    """Join run rows to the calls already fetched, in memory.
-
-    Asking Langfuse for each run's children separately would be another request per
-    row to render one table -- which is exactly what put this dashboard over the rate
-    limit the first time it was built.
-    """
-    calls_by_trace: Dict[str, List[Dict[str, Any]]] = {}
-    for call in calls:
-        calls_by_trace.setdefault(call["trace_id"], []).append(call)
-
-    runs = []
-    for trace in raw_traces:
-        trace_id = str(_get(trace, "id", default=""))
-        trace_calls = calls_by_trace.get(trace_id, [])
-        errors = [c for c in trace_calls if c["status"] == "error"]
-        runs.append(
-            {
-                "id": trace_id,
-                "name": str(_get(trace, "name", default="run")),
-                "started_at": _iso(_get(trace, "timestamp")),
-                "latency_ms": _seconds_to_ms(_get(trace, "latency")),
-                # Prefer the run-level cost Langfuse computes; fall back to summing the
-                # children when the window did not include all of them.
-                "cost_usd": float(_get(trace, "total_cost", "totalCost", default=0) or 0)
-                or sum(c["cost_usd"] for c in trace_calls),
-                "total_tokens": sum(c["total_tokens"] for c in trace_calls),
-                "call_count": len(trace_calls),
-                "error_count": len(errors),
-                "status": "error" if errors else "success",
-                "user_id": _get(trace, "user_id", "userId"),
-                "session_id": _get(trace, "session_id", "sessionId"),
-                "agents": sorted({c["agent_name"] for c in trace_calls}),
-                "models": sorted({c["model"] for c in trace_calls if c["model"] != "unknown"}),
-                "langfuse_url": trace_url(trace_id),
+    def snapshot(self, hours=24, run_limit=8, call_limit=60):
+        if not self.available:
+            return {"available": False, "reason": "Langfuse credentials are not configured for Guardian."}
+        # Keep direct callers bounded too; the HTTP API validates these parameters.
+        if not 1 <= hours <= 168 or not 1 <= run_limit <= 100 or not 1 <= call_limit <= 100:
+            raise ValueError("Live query exceeds supported bounds")
+        try:
+            payload, stale, fetched_at = self._cache.get_or_fetch(
+                "window:%d" % hours, lambda: self._fetch_snapshot(hours))
+        except Exception as exc:
+            logger.warning("Live read unavailable (%s).", type(exc).__name__)
+            return {
+                "available": True, "degraded": True, "stale": False, "fetched_at": None,
+                "reason": "Guardian could not read telemetry. Refresh to try again.",
+                "coverage": {"scope": "window_generations", "status": "failed",
+                             "reason": str(exc) if isinstance(exc, LiveReadError) else "source_unavailable",
+                             "max_records": MAX_WINDOW_RECORDS},
+                "stats": None, "calls": [], "runs": [],
             }
-        )
-    return runs
+        return {
+            **payload,
+            "stale": stale,
+            "fetched_at": payload["coverage"]["fetched_at"] or datetime.fromtimestamp(fetched_at, timezone.utc).isoformat(),
+            "calls": payload["calls"][:call_limit],
+            "runs": payload["runs"][:run_limit],
+            "feed": {"returned": min(call_limit, len(payload["calls"])), "limit": call_limit,
+                     "limited": len(payload["calls"]) > call_limit},
+        }
+
+    def _fetch_run(self, trace_id, hours):
+        until = datetime.now(timezone.utc)
+        result = self._generations(until - timedelta(hours=hours), until, trace_id=trace_id)
+        calls = sorted((_metric_to_call(m) for m in result.metrics),
+                       key=lambda c: c["started_at"])
+        coverage = _coverage(result, "trace_generations")
+        return {**_run_from(trace_id, calls, self._source.trace_url, coverage, result.metrics),
+                "window_hours": hours, "calls": calls}
+
+    def run_detail(self, trace_id, hours=MAX_RUN_HOURS):
+        if type(hours) is not int or not 1 <= hours <= MAX_RUN_HOURS:
+            raise ValueError("Run query exceeds supported bounds")
+        if not self.available:
+            raise LiveReadError("not_configured")
+        try:
+            payload, stale, fetched_at = self._cache.get_or_fetch(
+                "trace:%d:%s" % (hours, trace_id), lambda: self._fetch_run(trace_id, hours))
+        except LiveReadError:
+            raise
+        except Exception:
+            raise LiveReadError("trace_unavailable") from None
+        return {**payload, "stale": stale,
+                "fetched_at": payload["coverage"]["fetched_at"] or datetime.fromtimestamp(fetched_at, timezone.utc).isoformat()}

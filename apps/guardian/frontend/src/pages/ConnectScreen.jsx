@@ -3,39 +3,13 @@ import { ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import guardianApi, { setApiKey } from '@/services/guardianApi';
 
-/**
- * Guardian's own sign-in. It is a standalone service, so it can't reuse a monitored
- * application's session -- the operator supplies Guardian's API key directly. The key
- * is validated against the API before being stored, so a wrong key fails here rather
- * than turning into confusing 401s on every page.
- */
-const ConnectScreen = ({ onConnected }) => {
+const ConnectScreen = ({ authMode = 'api_key', onLogin, onConnect, checking = false, error = '' }) => {
   const [key, setKey] = useState('');
-  const [error, setError] = useState('');
-  const [checking, setChecking] = useState(false);
 
-  const connect = async (event) => {
+  const connect = (event) => {
     event.preventDefault();
-    setChecking(true);
-    setError('');
-    setApiKey(key.trim());
-    try {
-      await guardianApi.getOverview();
-      onConnected();
-    } catch (err) {
-      const status = err?.response?.status;
-      setError(
-        status === 401
-          ? 'That key was rejected by the Guardian API.'
-          : status === 503
-          ? 'Guardian has no API key configured yet — set GUARDIAN_API_KEY in apps/guardian/backend/.env'
-          : 'Could not reach the Guardian API. Is it running on port 8001?'
-      );
-    } finally {
-      setChecking(false);
-    }
+    if (key.trim() && !checking) onConnect(key.trim());
   };
 
   return (
@@ -50,7 +24,13 @@ const ConnectScreen = ({ onConnected }) => {
             </div>
           </div>
 
-          <form onSubmit={connect}>
+          <p className="text-sm text-slate-600 mb-5">Connect to inspect captured AI usage and incident evidence.
+            Access does not start monitoring; source setup and application instrumentation are separate.</p>
+          {authMode === 'oidc' ? <div>
+            <p className="text-sm text-slate-600">Sign in with your organization account. Your Guardian operator manages project membership and permissions.</p>
+            {error && <p role="alert" className="text-sm text-red-600 mt-3">{error}</p>}
+            <Button className="w-full mt-5" onClick={onLogin}>Sign in with your organization</Button>
+          </div> : <form onSubmit={connect}>
             <label className="text-sm text-slate-700 block mb-2" htmlFor="api-key">
               Guardian API key
             </label>
@@ -61,15 +41,17 @@ const ConnectScreen = ({ onConnected }) => {
               onChange={(e) => setKey(e.target.value)}
               placeholder="gk_..."
               autoFocus
+              disabled={checking}
+              autoComplete="off"
             />
             <p className="text-xs text-slate-400 mt-2">
-              Found in <code>apps/guardian/backend/.env</code> as <code>GUARDIAN_API_KEY</code>.
+              Use the access key supplied by your Guardian operator. This is not a model-provider key or an ingestion token.
             </p>
-            {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
+            {error && <p role="alert" className="text-sm text-red-600 mt-3">{error}</p>}
             <Button type="submit" className="w-full mt-5" disabled={!key.trim() || checking}>
               {checking ? 'Connecting...' : 'Connect'}
             </Button>
-          </form>
+          </form>}
         </CardContent>
       </Card>
     </div>

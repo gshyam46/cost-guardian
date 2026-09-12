@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { isKnown, money, duration, count } from '@/lib/liveFormat';
 
 /**
  * Dependency-free inline SVG/HTML charts for the live dashboard.
@@ -47,12 +48,12 @@ export const BarList = ({ rows, valueKey, format, label, names }) => {
   const [hovered, setHovered] = useState(null);
   if (!rows || rows.length === 0) return <Empty label={label} />;
 
-  const max = Math.max(...rows.map((r) => r[valueKey]), 0) || 1;
+  const max = Math.max(...rows.map((r) => r[valueKey]).filter(isKnown), 0) || 1;
 
   return (
     <div className="space-y-2.5">
       {rows.map((row) => {
-        const pct = (row[valueKey] / max) * 100;
+        const pct = isKnown(row[valueKey]) ? (row[valueKey] / max) * 100 : 0;
         const isHovered = hovered === row.name;
         return (
           <div
@@ -79,7 +80,7 @@ export const BarList = ({ rows, valueKey, format, label, names }) => {
               <div
                 className="h-full rounded-full transition-all duration-300"
                 style={{
-                  width: `${Math.max(pct, 1.5)}%`,
+                  width: `${pct}%`,
                   backgroundColor: colorFor(row.name, names),
                   opacity: hovered && !isHovered ? 0.45 : 1,
                 }}
@@ -87,8 +88,8 @@ export const BarList = ({ rows, valueKey, format, label, names }) => {
             </div>
             {isHovered && (
               <div className="mt-1 text-[11px] text-slate-500 tabular-nums">
-                {row.calls} calls · {row.errors} errors · {row.tokens.toLocaleString()} tokens ·
-                avg {Math.round(row.avg_latency_ms).toLocaleString()}ms
+                {row.calls} calls · {row.errors} errors · {count(row.tokens)} tokens ·
+                avg {duration(row.avg_latency_ms)} · {count(row.cost_unknown_count)} costs unknown
               </div>
             )}
           </div>
@@ -103,9 +104,8 @@ export const BarList = ({ rows, valueKey, format, label, names }) => {
  *
  * Dots rather than a line: these are discrete calls by different agents, not samples
  * of one continuous signal, and joining them would imply a continuity that does not
- * exist. Failures are drawn as hollow rings at the baseline -- a failed call has no
- * meaningful latency, and plotting its near-zero duration as if it were fast would be
- * an actively misleading reading of the data.
+ * exist. Only known durations are plotted; errors have hollow rings at their measured
+ * duration. Missing timing evidence never becomes a zero-duration point.
  */
 export const LatencyScatter = ({ calls, names }) => {
   const [hovered, setHovered] = useState(null);
@@ -114,9 +114,9 @@ export const LatencyScatter = ({ calls, names }) => {
   const width = 720;
   const height = 160;
   const pad = { top: 12, right: 12, bottom: 20, left: 46 };
-  const ordered = [...calls].reverse(); // oldest -> newest, left -> right
-  const successes = ordered.filter((c) => c.status === 'success');
-  const max = Math.max(...successes.map((c) => c.latency_ms), 1000);
+  const ordered = [...calls].filter((c) => isKnown(c.latency_ms)).reverse();
+  if (ordered.length === 0) return <Empty label="measured durations" />;
+  const max = Math.max(...ordered.map((c) => c.latency_ms), 1000);
 
   // Log scale, because LLM latency routinely spans two orders of magnitude in one
   // window -- a 300ms call and an 81s outlier in the same series. On a linear axis the
@@ -162,7 +162,7 @@ export const LatencyScatter = ({ calls, names }) => {
 
         {ordered.map((call, i) => {
           const failed = call.status === 'error';
-          const cy = failed ? height - pad.bottom : y(call.latency_ms);
+          const cy = y(call.latency_ms);
           const isHovered = hovered?.id === call.id;
           return (
             <circle
@@ -186,10 +186,8 @@ export const LatencyScatter = ({ calls, names }) => {
         <div className="absolute top-0 right-0 bg-slate-900 text-white text-[11px] rounded-md px-2.5 py-2 shadow-lg pointer-events-none max-w-[280px]">
           <div className="font-semibold">{hovered.agent_name}</div>
           <div className="text-slate-300 tabular-nums">
-            {hovered.status === 'error'
-              ? 'failed'
-              : `${Math.round(hovered.latency_ms).toLocaleString()}ms`}{' '}
-            · {hovered.total_tokens.toLocaleString()} tok · ${hovered.cost_usd.toFixed(5)}
+            {duration(hovered.latency_ms)}{hovered.status === 'error' ? ' (error)' : ''}{' '}
+            · {count(hovered.total_tokens)} tok · {money(hovered.cost_usd)}
           </div>
           <div className="text-slate-400 truncate">{hovered.model}</div>
         </div>
@@ -202,7 +200,7 @@ export const LatencyScatter = ({ calls, names }) => {
             className="inline-block h-2.5 w-2.5 rounded-full border-2"
             style={{ borderColor: STATUS.critical }}
           />
-          failed call (drawn at baseline)
+          observed error
         </span>
       </div>
     </div>
@@ -219,11 +217,12 @@ export const LatencyScatter = ({ calls, names }) => {
  */
 export const RunWaterfall = ({ calls, names }) => {
   const [hovered, setHovered] = useState(null);
-  if (!calls || calls.length === 0) return <Empty label="calls" />;
+  const measured = (calls || []).filter((c) => isKnown(c.latency_ms) && Number.isFinite(Date.parse(c.started_at)));
+  if (measured.length === 0) return <Empty label="measured durations" />;
 
-  const starts = calls.map((c) => new Date(c.started_at).getTime());
+  const starts = measured.map((c) => new Date(c.started_at).getTime());
   const t0 = Math.min(...starts);
-  const spans = calls.map((c, i) => ({
+  const spans = measured.map((c, i) => ({
     call: c,
     offset: starts[i] - t0,
     duration: Math.max(c.latency_ms, 1),

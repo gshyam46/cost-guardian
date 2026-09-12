@@ -55,12 +55,16 @@ venv/
 
 # Verification script output (may contain trace ids from a real project, never secrets)
 tools/verify_mvp_report.json
+tools/build_baseline_report.json
+tools/reports/
 
 # Real credentials -- never commit. Each app has a tracked .env.example template.
 # NOTE: backend/.env was tracked in commits 6b20601/bbb6820 before this rule existed;
 # any key present in those commits must be treated as compromised and rotated.
 .env
 **/.env
+.env.*
+*.env
 !**/.env.example
 
 # Development tools

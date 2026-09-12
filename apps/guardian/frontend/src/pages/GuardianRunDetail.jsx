@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,9 +8,7 @@ import GuardianLayout from './GuardianLayout';
 import { RunWaterfall, STATUS, colorFor } from '@/components/Charts';
 import guardianApi from '@/services/guardianApi';
 import useLiveData from '@/hooks/useLiveData';
-
-const money = (v) => `$${v.toFixed(5)}`;
-const ms = (v) => (v >= 1000 ? `${(v / 1000).toFixed(2)}s` : `${Math.round(v)}ms`);
+import { money, duration as ms, count, observedCost } from '@/lib/liveFormat';
 
 const Field = ({ label, value, tone }) => (
   <div>
@@ -22,10 +19,7 @@ const Field = ({ label, value, tone }) => (
   </div>
 );
 
-/** One call, collapsed to a row and expandable to its model output.
- *
- *  The output is the reason this page exists: a latency number tells you a call was
- *  slow, but only the response tells you whether it was slow *and wrong*. */
+/** Inspect captured measurements and optional source-provided output previews. */
 const CallRow = ({ call, names, index }) => {
   const [open, setOpen] = useState(false);
   const failed = call.status === 'error';
@@ -50,10 +44,10 @@ const CallRow = ({ call, names, index }) => {
         ) : (
           <>
             <span className="text-xs tabular-nums text-slate-500 w-20 text-right">
-              {call.input_tokens.toLocaleString()} in
+              {count(call.input_tokens)} in
             </span>
             <span className="text-xs tabular-nums text-slate-500 w-20 text-right">
-              {call.output_tokens.toLocaleString()} out
+              {count(call.output_tokens)} out
             </span>
             <span className="text-xs tabular-nums text-slate-600 w-20 text-right">
               {ms(call.latency_ms)}
@@ -69,7 +63,9 @@ const CallRow = ({ call, names, index }) => {
         <div className="px-5 pb-4 pt-1 bg-slate-50/60">
           {failed && call.status_message && (
             <div className="mb-3">
-              <div className="text-xs font-medium text-slate-600 mb-1">Provider error</div>
+              <div className="text-xs font-medium text-slate-600 mb-1">Provider error
+                {call.status_message_truncated && <span> — first 400 characters</span>}
+              </div>
               <pre className="text-xs bg-red-50 border border-red-200 text-red-900 rounded p-3 overflow-x-auto whitespace-pre-wrap">
                 {call.status_message}
               </pre>
@@ -86,13 +82,13 @@ const CallRow = ({ call, names, index }) => {
             <div>
               <div className="text-slate-500">Time to first token</div>
               <div className="tabular-nums text-slate-900">
-                {call.time_to_first_token_ms ? ms(call.time_to_first_token_ms) : '--'}
+                {ms(call.time_to_first_token_ms)}
               </div>
             </div>
             <div>
               <div className="text-slate-500">Tokens (in / out)</div>
               <div className="tabular-nums text-slate-900">
-                {call.input_tokens.toLocaleString()} / {call.output_tokens.toLocaleString()}
+                {count(call.input_tokens)} / {count(call.output_tokens)}
               </div>
             </div>
             <div>
@@ -129,16 +125,14 @@ const GuardianRunDetail = () => {
   const { traceId } = useParams();
   const navigate = useNavigate();
 
-  const fetchRun = useCallback(async () => (await guardianApi.getLiveRun(traceId)).data, [traceId]);
+  const fetchRun = useCallback(async ({ signal } = {}) => (await guardianApi.getLiveRun(traceId, { signal })).data, [traceId]);
 
   const { data: run, loading, refreshing, error, lastUpdated } = useLiveData(fetchRun, {
     intervalMs: 15000,
     refetchKey: traceId,
   });
 
-  if (error && !run) toast.error('Run not found in Langfuse');
-
-  if (loading) {
+  if (loading || (run && run.id !== traceId && !error)) {
     return (
       <GuardianLayout>
         <div className="animate-pulse text-slate-600">Loading run...</div>
@@ -146,7 +140,7 @@ const GuardianRunDetail = () => {
     );
   }
 
-  if (!run) {
+  if (!run || run.id !== traceId || error?.response?.status === 404) {
     return (
       <GuardianLayout>
         <Button variant="ghost" size="sm" onClick={() => navigate('/live')} className="mb-4">
@@ -156,7 +150,7 @@ const GuardianRunDetail = () => {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-slate-600">
-              This run could not be loaded from Langfuse.
+              This trace is unavailable. Guardian could not read its telemetry.
             </p>
           </CardContent>
         </Card>
@@ -165,9 +159,29 @@ const GuardianRunDetail = () => {
   }
 
   const names = [...new Set(run.calls.map((c) => c.agent_name))];
+  const empty = run.calls.length === 0;
+  const notObserved = run.observation_state === 'not_observed';
 
   return (
     <GuardianLayout refreshing={refreshing} lastUpdated={lastUpdated}>
+      {(run.stale || error) && <Card className="mb-4 border-amber-200 bg-amber-50"><CardContent className="py-3">
+        <p role="status">Showing stale trace data. The last successful read was {run.fetched_at || 'at an unknown time'}.</p>
+      </CardContent></Card>}
+      {run.coverage?.status !== 'complete' && <Card className="mb-4 border-amber-200 bg-amber-50"><CardContent className="py-3">
+        <p role="status">Partial observation coverage. Counts and known costs describe accepted observations only.
+          {' '}{count(run.coverage?.invalid_count)} rejected; {count(run.coverage?.duplicate_count)} repeated.
+          {run.coverage?.truncated && <> The read budget allows up to {count(run.coverage.max_records)} records or {count(run.coverage.max_pages)} pages.</>}
+          {run.coverage?.reason && <> Read status: {run.coverage.reason}.</>}
+        </p>
+      </CardContent></Card>}
+      {run.aggregate_issues?.length > 0 && <Card className="mb-4 border-amber-200 bg-amber-50"><CardContent className="py-3">
+        <p role="status">Some aggregate amounts exceed the supported numeric range and are shown as unknown.</p>
+      </CardContent></Card>}
+      {empty && <Card className="mb-4"><CardContent className="py-4">
+        <p role="status">{notObserved ? 'No generation calls observed in this query window. This does not establish that the trace is missing.'
+          : 'No accepted generation calls could be established from this partial read. Trace existence remains undetermined.'}</p>
+        <p className="text-sm text-slate-500 mt-1">Spend, usage and workflow duration cannot be established from this read.</p>
+      </CardContent></Card>}
       <Button variant="ghost" size="sm" onClick={() => navigate('/live')} className="mb-4">
         <ArrowLeft className="h-4 w-4 mr-1" />
         Back to live activity
@@ -179,18 +193,21 @@ const GuardianRunDetail = () => {
             <h2 className="text-xl font-semibold text-slate-900">{run.name}</h2>
             {run.error_count > 0 ? (
               <Badge className="bg-red-100 text-red-700 hover:bg-red-100">
-                {run.error_count} failed {run.error_count === 1 ? 'call' : 'calls'}
+                {run.error_count} observed {run.error_count === 1 ? 'error' : 'errors'}
               </Badge>
             ) : (
-              <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
-                all calls succeeded
+              <Badge variant="outline">
+                {empty ? 'No accepted observations' : 'no errors observed'}
               </Badge>
             )}
           </div>
           <p className="text-xs text-slate-500 font-mono truncate">{run.id}</p>
           <p className="text-xs text-slate-500 mt-0.5">
-            {new Date(run.started_at).toLocaleString()}
+            First observed call: {run.started_at ? new Date(run.started_at).toLocaleString() : 'Unknown'}
           </p>
+          <p className="text-sm text-slate-500 mt-1">Workflow outcome unknown. LLM observations do not establish a completed customer operation.</p>
+          <p className="text-xs text-slate-500 mt-2 break-words">Query window: last {run.window_hours || 168} hours, from {run.coverage?.window_start || 'unknown'} to {run.coverage?.window_end || 'unknown'}.</p>
+          <p className="text-xs text-slate-500 mt-1">Source retention may shorten accessible history. A complete query covers accessible observations in this window; delayed telemetry may still arrive.</p>
         </div>
         {run.langfuse_url && (
           <a href={run.langfuse_url} target="_blank" rel="noreferrer" className="shrink-0">
@@ -202,24 +219,26 @@ const GuardianRunDetail = () => {
         )}
       </div>
 
-      <Card className="mb-5">
+      {!empty && <><Card className="mb-5">
         <CardContent className="pt-5 grid grid-cols-2 sm:grid-cols-4 gap-6">
-          <Field label="Duration" value={ms(run.latency_ms)} />
-          <Field label="Calls" value={run.call_count} />
+          <Field label="Workflow duration" value="Unknown" />
+          <Field label="Observed calls" value={run.call_count} />
           <Field
-            label="Failed"
+            label="Observed errors"
             value={run.error_count}
             tone={run.error_count > 0 ? STATUS.critical : undefined}
           />
-          <Field label="Cost" value={money(run.cost_usd)} />
+          <Field label="Known observed cost" value={observedCost(run.cost_usd, run.known_cost_usd, run.cost_known_count)} />
         </CardContent>
+        <CardContent><p className="text-xs text-slate-500">{count(run.cost_unknown_count)} observations missing cost;
+          {' '}{count(run.tokens_unknown_count)} missing token totals; {count(run.latency_unknown_count)} missing duration.</p></CardContent>
       </Card>
 
       <Card className="mb-5">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Timeline</CardTitle>
           <CardDescription>
-            Each call positioned by when it started and how long it ran.
+            Measured calls positioned by source start time and duration. Observations without a duration are not plotted.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -230,14 +249,16 @@ const GuardianRunDetail = () => {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Calls</CardTitle>
-          <CardDescription>Click a call to see its output and token detail.</CardDescription>
+          <CardDescription>{run.source_kind === 'guardian_direct'
+            ? 'Inspect terminal-call measurements. Direct capture does not collect prompts, outputs or document content.'
+            : 'Click a call to inspect its captured measurements and available output.'}</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           {run.calls.map((call, i) => (
             <CallRow key={call.id || i} call={call} names={names} index={i} />
           ))}
         </CardContent>
-      </Card>
+      </Card></>}
     </GuardianLayout>
   );
 };
