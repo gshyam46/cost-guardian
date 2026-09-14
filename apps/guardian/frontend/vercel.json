@@ -1,0 +1,27 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "create-react-app",
+  "installCommand": "npm ci --ignore-scripts --no-audit --no-fund",
+  "buildCommand": "npm run build:public",
+  "outputDirectory": "build",
+  "functions": {
+    "api/availability.js": { "maxDuration": 10 },
+    "api/interest.js": { "maxDuration": 15 }
+  },
+  "headers": [
+    { "source": "/api/:path*", "headers": [
+      { "key": "Cache-Control", "value": "no-store" },
+      { "key": "Referrer-Policy", "value": "no-referrer" },
+      { "key": "X-Content-Type-Options", "value": "nosniff" }
+    ] }
+  ],
+  "rewrites": [
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/welcome", "destination": "/index.html" },
+    { "source": "/demo", "destination": "/index.html" },
+    { "source": "/signup", "destination": "/index.html" },
+    { "source": "/privacy", "destination": "/index.html" },
+    { "source": "/signin", "destination": "/index.html" },
+    { "source": "/setup", "destination": "/index.html" }
+  ]
+}

@@ -1,0 +1,16 @@
+# Deploy this application directory only. Never upload local environment files.
+**/.*
+!/.vercelignore
+node_modules/
+**/node_modules/
+build/
+**/build/
+coverage/
+**/coverage/
+*.log
+**/*.log
+*.pem
+**/*.pem
+*credentials*.json
+*token*.json
+plugins/

@@ -1,0 +1,50 @@
+{
+  "name": "guardian-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "engines": { "node": "24.x", "npm": "11.x" },
+  "packageManager": "npm@11.19.0",
+  "dependencies": {
+    "@radix-ui/react-slot": "^1.2.4",
+    "@vercel/functions": "3.9.7",
+    "axios": "^1.8.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cra-template": "1.2.0",
+    "lucide-react": "^0.507.0",
+    "mongodb": "7.6.0",
+    "next-themes": "^0.4.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.5.1",
+    "react-scripts": "5.0.1",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.2.0",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "scripts": {
+    "start": "craco start",
+    "build": "craco build",
+    "build:public": "node scripts/build-public.cjs",
+    "test:public-build": "node --test scripts/test-public-build.cjs",
+    "test": "craco test"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@craco/craco": "^7.1.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17"
+  }
+}
