@@ -176,6 +176,11 @@ export const LatencyScatter = ({ calls, names }) => {
               opacity={hovered && !isHovered ? 0.4 : 1}
               onMouseEnter={() => setHovered(call)}
               onMouseLeave={() => setHovered(null)}
+              onFocus={() => setHovered(call)}
+              onBlur={() => setHovered(null)}
+              tabIndex="0"
+              role="img"
+              aria-label={`${call.agent_name}: ${duration(call.latency_ms)}${failed ? ', observed error' : ''}`}
               style={{ cursor: 'pointer', transition: 'r 120ms' }}
             />
           );
@@ -225,22 +230,27 @@ export const RunWaterfall = ({ calls, names }) => {
   const spans = measured.map((c, i) => ({
     call: c,
     offset: starts[i] - t0,
-    duration: Math.max(c.latency_ms, 1),
+    duration: c.latency_ms,
   }));
-  const total = Math.max(...spans.map((s) => s.offset + s.duration), 1);
+  const total = Math.max(...spans.map((s) => s.offset + s.duration), 0);
+  const scale = Math.max(total, 1);
 
   return (
     <div className="space-y-1.5">
       {spans.map(({ call, offset, duration }, i) => {
         const failed = call.status === 'error';
-        const left = (offset / total) * 100;
-        const width = Math.max((duration / total) * 100, 0.8);
+        const left = (offset / scale) * 100;
+        const width = Math.min(Math.max((duration / scale) * 100, 0.8), 100 - left);
         return (
           <div
             key={call.id || i}
             className="flex items-center gap-3"
             onMouseEnter={() => setHovered(call.id)}
             onMouseLeave={() => setHovered(null)}
+            onFocus={() => setHovered(call.id)}
+            onBlur={() => setHovered(null)}
+            tabIndex="0"
+            aria-label={`${call.agent_name}: ${Math.round(call.latency_ms)}ms${failed ? ', observed error' : ''}`}
           >
             <div className="w-36 shrink-0 text-xs text-slate-600 truncate text-right">
               {call.agent_name}
@@ -250,7 +260,8 @@ export const RunWaterfall = ({ calls, names }) => {
                 className="absolute top-1 h-4 rounded transition-opacity"
                 style={{
                   left: `${left}%`,
-                  width: `${width}%`,
+                  width: duration === 0 ? '2px' : `${width}%`,
+                  transform: duration === 0 && left === 100 ? 'translateX(-2px)' : undefined,
                   backgroundColor: failed ? STATUS.critical : colorFor(call.agent_name, names),
                   // 2px surface gap so adjacent spans never fuse into one bar.
                   boxShadow: '0 0 0 2px #ffffff',
@@ -259,11 +270,9 @@ export const RunWaterfall = ({ calls, names }) => {
               />
             </div>
             <div className="w-24 shrink-0 text-xs tabular-nums text-slate-500 text-right">
-              {failed ? (
-                <span style={{ color: STATUS.critical }}>failed</span>
-              ) : (
-                `${Math.round(call.latency_ms).toLocaleString()}ms`
-              )}
+              <span style={{ color: failed ? STATUS.critical : undefined }}>
+                {`${Math.round(call.latency_ms).toLocaleString()}ms`}{failed && ' · error'}
+              </span>
             </div>
           </div>
         );
@@ -272,7 +281,7 @@ export const RunWaterfall = ({ calls, names }) => {
         <div className="w-36 shrink-0" />
         <div className="flex-1 flex justify-between text-[11px] text-slate-400 tabular-nums">
           <span>0ms</span>
-          <span>{(total / 1000).toFixed(1)}s</span>
+          <span>{duration(total)}</span>
         </div>
         <div className="w-24 shrink-0" />
       </div>

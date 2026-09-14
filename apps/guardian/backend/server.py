@@ -21,6 +21,7 @@ from starlette.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 
 from api.routes import router as guardian_router, close_source
+from api.integrations import router as integration_router
 from config import CORS_ORIGINS, GUARDIAN_API_KEY
 from db import close_database, db
 from identity.routes import router as identity_router
@@ -39,7 +40,7 @@ logger = logging.getLogger(__name__)
 install_callback_log_filter()
 
 app = FastAPI(
-    title="Cost Guardian",
+    title="Sillage",
     description="AI cost and reliability monitoring from native usage events or Langfuse observations.",
     version="0.1.0",
 )
@@ -72,6 +73,7 @@ api_router.include_router(identity_router)
 api_router.include_router(capture_router)
 api_router.include_router(policy_router)
 api_router.include_router(notification_router)
+api_router.include_router(integration_router)
 app.include_router(api_router)
 
 # Absent in ordinary development commands. Explicit production builds use the

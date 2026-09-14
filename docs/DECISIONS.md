@@ -1,4 +1,20 @@
-# Cost Guardian: decision register
+# Sillage: decision register
+
+## ADR-51: reuse OpenInference and preserve OpenTelemetry context, 2026-09-13
+
+Accepted before implementation in [OPENTELEMETRY.md](OPENTELEMETRY.md). Use maintained Python instrumentors plus an in-process Sillage span processor that emits only supported LLM call measurements through the existing direct collector. Preserve real trace/span/parent IDs and supplied agent context; non-LLM framework spans cannot become charged/counted generations. Keep existing Langfuse and native paths compatible, preserve externally owned providers/exporters, and make content exclusion explicit. Ship a versioned wheel and visible onboarding choice with verified compatibility. A general OTLP receiver and full workflow-span store require subsequent contracts. The founder also authorised committing and pushing the completed integration, landing page, frontend and documentation to `mvp2.0`.
+
+## ADR-50: installable Python capture and startup instrumentation, 2026-09-13
+
+The founder requested a simpler install-and-run path and clarity about where data comes from. [INSTRUMENTATION.md](INSTRUMENTATION.md) records the contract before implementation. Ship `sillage-observe` as an authenticated downloadable Python wheel, with import `sillage_observe` and console command `sillage-run`. No PyPI publication is implied. Install into the application's existing environment, configure the Sillage address and scoped ingestion key, then install version-checked hooks before importing the original application. Reuse the strict numeric event transport; preserve existing results, errors, SDK arguments and provider callbacks. Suppress nested SDK instrumentation so a LiteLLM call is not counted again as an OpenAI call, while retaining distinct application fallback attempts.
+
+The first matrix targets the versions installed in Founder Path: LiteLLM 1.80.0 ordinary completion and OpenAI 1.99.9 tested call/stream interfaces. Unsupported versions remain uninstrumented with a safe diagnostic; no automatic dependency downgrade. Single-process startup is the boundary. Langfuse stays a separate source choice, and the collector does not accept arbitrary OTLP. SDK hooks remove copied modules and per-call edits for the supported path; custom workflow context, Node automatic instrumentation, subprocesses and full RAG spans need separate contracts. Connections leads with create key → install/run → verify real call; a test event is optional and cannot establish activation. [VALIDATION.md](VALIDATION.md) records actual installed-package evidence and remaining release gates.
+
+## Experience and naming decisions, 2026-09-13
+
+**ADR-48 — Implemented experience contract:** [EXPERIENCE.md](EXPERIENCE.md) was recorded before changing code in response to [query.md](query.md). Add public landing/demo routes isolated from private data and session effects, then preserve the existing identity boundary for real onboarding. Provide guided Connections and authenticated helper archives; load recent-call evidence independently of processed accounting. These changes improve the real journey without simulating signup, a live connection or full RAG capture.
+
+**ADR-49 — Confirmed product name:** The founder selected **Sillage**, meaning a wake that reveals what passed through. [BRAND.md](BRAND.md) records the rationale, known naming overlap and compatibility decision. Rename visible product copy and documentation; keep existing API, configuration, helper-module and stored-identity identifiers so current integrations continue to work.
 
 Updated 2026-09-12. **Confirmed requirement** means explicitly requested by the founder. **Planning decision** is the recommended direction for implementation, not a claim that code or provisioning exists. Revisit with evidence and append a superseding decision rather than silently changing rationale.
 

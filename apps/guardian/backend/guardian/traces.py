@@ -98,6 +98,7 @@ def _metric_to_call(metric):
     return {
         "id": metric.observation_id,
         "trace_id": metric.trace_id,
+        "parent_observation_id": metric.parent_observation_id,
         "agent_name": metric.agent_name,
         "model": metric.model,
         "status": metric.status,

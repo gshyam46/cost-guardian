@@ -64,6 +64,30 @@ async def test_live_uses_numeric_ledger_without_vendor_or_content_fields(environ
     assert run["calls"][0]["id"] == "call-one"
 
 
+async def test_parent_references_survive_direct_views_without_counting_uncollected_parents(environment):
+    db, _, reader = environment
+    parent = "00000000000000a1"
+    await insert(db, "00000000000000b1", parent_observation_id=parent)
+    await insert(db, "00000000000000b2", parent_observation_id=parent)
+    snapshot = await reader.snapshot()
+    assert snapshot["stats"]["call_count"] == 2
+    assert snapshot["stats"]["total_tokens"] == 24
+    assert len(snapshot["runs"]) == 1
+    assert {call["parent_observation_id"] for call in snapshot["calls"]} == {parent}
+    run = await reader.run_detail("trace-one")
+    assert run["call_count"] == 2
+    assert {call["id"] for call in run["calls"]} == {"00000000000000b1", "00000000000000b2"}
+    assert {call["parent_observation_id"] for call in run["calls"]} == {parent}
+    assert run["workflow_status"] == "unknown" and run["latency_ms"] is None
+
+
+async def test_direct_root_does_not_get_a_synthetic_parent(environment):
+    db, _, reader = environment
+    await insert(db)
+    assert (await reader.snapshot())["calls"][0]["parent_observation_id"] is None
+    assert (await reader.run_detail("trace-one"))["calls"][0]["parent_observation_id"] is None
+
+
 async def test_missing_and_conflicted_measurements_remain_unknown(environment):
     db, _, reader = environment
     await insert(db, "known-zero", cost_usd=0, cost_usd_decimal="0", total_tokens=0)

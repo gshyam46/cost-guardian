@@ -1,6 +1,23 @@
 # Allowlist for `docker build -f deploy/guardian/Dockerfile .`.
 # Dockerfile-specific ignore rules take precedence over a root .dockerignore.
 **
+!packages/
+!packages/sillage-python/
+!packages/sillage-python/pyproject.toml
+!packages/sillage-python/README.md
+!packages/sillage-python/src/
+!packages/sillage-python/src/sillage_observe/
+!packages/sillage-python/src/sillage_observe/*.py
+!packages/sillage-python/src/sillage_observe/_vendor/
+!packages/sillage-python/src/sillage_observe/_vendor/*.py
+!examples/
+!examples/native-capture/
+!examples/native-capture/guardian_capture.py
+!examples/native-capture/guardian_exporter.py
+!examples/native-capture/guardian_openai.py
+!examples/native-capture/guardian_capture.mjs
+!examples/native-capture/guardian_exporter.mjs
+!examples/native-capture/guardian_openai.mjs
 !apps/
 !apps/guardian/
 !apps/guardian/backend/

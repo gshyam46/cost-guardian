@@ -8,6 +8,7 @@ import GuardianIncidents from "@/pages/GuardianIncidents";
 import GuardianIncidentDetail from "@/pages/GuardianIncidentDetail";
 import ConnectScreen from "@/pages/ConnectScreen";
 import GuardianSetup from "@/pages/GuardianSetup";
+import GuardianWelcome from "@/pages/GuardianWelcome";
 import { Button } from "@/components/ui/button";
 import guardianApi, { announceLogout, clearApiKey, clearSessionAccess, configureAuth, getApiKey, getLoginUrl, LOGOUT_NOTICE, setApiKey, setSessionAccess } from "@/services/guardianApi";
 import { beginLogin, restoreLoginPath, validAccess, validAuthConfig } from '@/services/guardianIdentity';
@@ -15,7 +16,7 @@ import { GuardianAccessContext } from '@/contexts/GuardianAccess';
 
 export { validAccess } from '@/services/guardianIdentity';
 
-function App() {
+function GuardianApplication() {
   const [access, setAccess] = useState({ phase: 'checking', message: '' });
   const pending = useRef(null);
   const generation = useRef(0);
@@ -63,18 +64,18 @@ function App() {
       } else if (error?.response?.status === 401) {
         if (mode.current === 'oidc') {
           clearSessionAccess();
-          reset('disconnected', 'Sign in to continue to Guardian.');
+          reset('disconnected', 'Sign in to continue to Sillage.');
           return;
         }
         try {
           if (!persist && getApiKey() === candidate) clearApiKey({ notify: false });
-          reset('disconnected', 'That key was rejected by the Guardian API.');
+          reset('disconnected', 'That key was rejected by the Sillage API.');
         } catch {
           reset('storage_error', 'Browser storage is unavailable. Allow site storage, then retry.');
         }
       } else {
         setAccess({ phase: persist ? 'disconnected' : 'unavailable',
-          message: 'Could not verify Guardian access. Retry when the service is available.' });
+          message: 'Could not verify Sillage access. Retry when the service is available.' });
       }
     } finally {
       if (current()) pending.current = null;
@@ -113,16 +114,16 @@ function App() {
         clearSessionAccess();
         announceLogout();
         logoutIntent.current = false;
-        reset('disconnected', 'Signed out of Guardian.');
+        reset('disconnected', 'Signed out of Sillage.');
       } catch (error) {
         if (!current()) return;
         if (error?.response?.status === 401) {
           clearSessionAccess();
           announceLogout();
           logoutIntent.current = false;
-          reset('disconnected', 'The Guardian session has ended.');
+          reset('disconnected', 'The Sillage session has ended.');
         } else {
-          setAccess({ phase: 'logout_failed', message: 'Could not confirm server sign-out. Your Guardian session may still be active. Retry sign-out.' });
+          setAccess({ phase: 'logout_failed', message: 'Could not confirm server sign-out. Your Sillage session may still be active. Retry sign-out.' });
         }
       }
       return;
@@ -156,7 +157,7 @@ function App() {
       restore();
     } catch {
       if (generation.current === currentGeneration && !controller.signal.aborted) {
-        reset('configuration_failed', 'Could not load Guardian sign-in configuration. Retry when the service is available.');
+        reset('configuration_failed', 'Could not load Sillage sign-in configuration. Retry when the service is available.');
       }
     }
   }, [reset, restore]);
@@ -164,7 +165,7 @@ function App() {
   useEffect(() => {
     const changed = (event) => {
       if (mode.current === 'oidc') {
-        if (event.detail?.reason === 'session_rejected') reset('disconnected', 'Your Guardian session has ended. Sign in again to continue.');
+        if (event.detail?.reason === 'session_rejected') reset('disconnected', 'Your Sillage session has ended. Sign in again to continue.');
         return;
       }
       if (!mode.current) return;
@@ -181,7 +182,7 @@ function App() {
     const sessionChanged = () => {
       if (mode.current !== 'oidc') return;
       clearSessionAccess();
-      if (logoutIntent.current) reset('logout_failed', 'Browser session state changed. Retry sign-out to verify and end the current Guardian session.');
+      if (logoutIntent.current) reset('logout_failed', 'Browser session state changed. Retry sign-out to verify and end the current Sillage session.');
       else if (!callbackFailed.current) restore();
     };
     let channel;
@@ -208,8 +209,8 @@ function App() {
   if (['checking', 'unavailable', 'storage_error', 'configuration_failed', 'logging_out', 'logout_failed'].includes(access.phase)) {
     return <main className="min-h-screen bg-slate-50 flex items-center justify-center px-6">
       <div className="max-w-md rounded-lg border bg-white p-6">
-        <h1 className="text-lg font-semibold mb-3">Cost Guardian</h1>
-        {access.phase === 'checking' || access.phase === 'logging_out' ? <p role="status">{access.phase === 'logging_out' ? 'Signing out of Guardian...' : 'Checking Guardian access...'}</p> : <>
+        <h1 className="text-lg font-semibold mb-3">Sillage</h1>
+        {access.phase === 'checking' || access.phase === 'logging_out' ? <p role="status">{access.phase === 'logging_out' ? 'Signing out of Sillage...' : 'Checking Sillage access...'}</p> : <>
           <p role="alert" className="text-sm text-amber-900">{access.message}</p>
           <div className="flex gap-2 mt-4">
             {access.phase === 'logout_failed' ? <Button onClick={() => disconnect({ revalidate: true })}>Retry sign-out</Button>
@@ -244,6 +245,14 @@ function App() {
       <Toaster position="top-right" richColors />
     </BrowserRouter></GuardianAccessContext.Provider>
   );
+}
+
+// Public examples never mount authentication or private data effects. Navigation
+// into a workspace uses real links so the existing guarded login lifecycle runs.
+function App() {
+  const path = window.location.pathname;
+  if (path === '/welcome' || path === '/demo') return <GuardianWelcome demo={path === '/demo'} />;
+  return <GuardianApplication />;
 }
 
 export default App;

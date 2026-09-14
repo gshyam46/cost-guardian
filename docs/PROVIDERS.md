@@ -4,6 +4,8 @@ Recorded before implementation on 2026-09-12. This slice lets a Python or Node a
 
 ## Supported customer path
 
+For tested Python SDKs, the simpler default is now [install and run with `sillage-run`](INSTRUMENTATION.md). It packages these same strict numeric helpers and adds version-checked startup hooks for OpenAI and LiteLLM; no copied modules or call-site edits are required for that path. The explicit integration below remains supported for manual Python and Node control. Its original no-monkey-patching description applies to the manual helpers, not the new launcher.
+
 1. Configure an isolated direct-capture Guardian deployment and create an ingestion key in Setup.
 2. Copy the matching `guardian_capture`, `guardian_exporter` and `guardian_openai` source modules into the server application. These are repository modules, not published packages. Keep using the application's own OpenAI SDK client and model configuration.
 3. Create one background exporter per process. Wrap the existing SDK operation with the OpenAI helper. The operation owns prompts, model parameters, authentication and provider retries; the helper never changes those arguments or creates a provider client.

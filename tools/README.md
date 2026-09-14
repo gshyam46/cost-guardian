@@ -1,5 +1,24 @@
 # Verification harness
 
+## OpenTelemetry and OpenInference acceptance
+
+`python tools/test_otel.py --help` is inert. The opt-in suite installs the explicit local 0.2.0 wheel outside the checkout, reuses only third-party dependencies from explicitly named interpreters, and uses an owned loopback replica set. It verifies existing-provider ownership, concurrent agent context, actual trace/parent IDs, immutable replay/conflict behavior, numeric privacy, selected OpenAI/LiteLLM/LangChain instrumentation, and the original Founder fallback source through the real HTTP collector and direct worker. Provider responses are synthetic. Early-closed or cancelled streams with no upstream ended span are recorded as missing capture, never successful coverage.
+
+```powershell
+& apps/guardian/backend/.venv/Scripts/python.exe tools/test_otel.py `
+  --wheel packages/sillage-python/dist/sillage_observe-0.2.0-py3-none-any.whl `
+  --sdk-python <python-with-tested-openinference-dependencies> `
+  --dependency-python <python-with-application-sdk-fixtures> `
+  --mongo-url 'mongodb://127.0.0.1:27021/?replicaSet=guardian-r102&directConnection=true' `
+  --report tools/reports/otel-installed.json
+```
+
+Create a separate test replica for this command; it does not start Mongo automatically. `--phases openai` allows repeating the OpenAI matrix in another explicit supported SDK environment. The [package README](../packages/sillage-python/README.md) records the exact dependency versions. CI builds the downloadable wheel from source; generated artifacts and local reports stay ignored. [Contract](../docs/OPENTELEMETRY.md), [verification record](../docs/VALIDATION.md).
+
+## Installed Python instrumentation
+
+`python tools/test_instrumentation.py` prints help without loading app configuration or starting services. With the existing Guardian/Founder interpreters, a built wheel and explicitly owned local replica set, it installs the wheel in a temporary environment outside the checkout, verifies the console launcher, exercises the installed OpenAI/LiteLLM SDKs and original Founder fallback source, and sends synthetic provider results through the real collector/worker. Use `--help` for the exact required paths and replica-set argument. No paid-provider or real-account activation claim is made. The report records artifact SHA-256, versions, numeric reconciliation, privacy checks and cleanup. [Instrumentation contract](../docs/INSTRUMENTATION.md) and [current evidence](../docs/VALIDATION.md).
+
 Updated 2026-09-12. These commands establish engineering evidence for R0-01, the R1 source/measurement work and the R2 identity/native-capture slices. A passing offline check does not establish production readiness or a working customer onboarding journey.
 
 ## Safe default and independent environments
@@ -177,6 +196,8 @@ After building Guardian, install the browser harness outside the application dep
 npm.cmd install --prefix .cache/browser-check --no-save --package-lock=false --no-audit --no-fund playwright@1.63.0
 node tools/browser_smoke.cjs --playwright .cache/browser-check/node_modules/playwright
 ```
+
+For an isolated production artifact, add `--static-dir '<allowlisted-production-build-directory>' --report-dir tools/reports/browser-experience`. The existing build/report defaults remain available; alternate reports must stay inside `tools/reports`. Public landing/demo and actual cookie-based onboarding are also exercised by `test_deployment.py` below: the public pages must make no private API requests, then the real signed login, helper downloads, first capture, worker processing and resolution journey must succeed.
 
 No arguments or `--help` prints usage without loading Playwright or starting a server. The explicit command serves the Guardian production build on an ephemeral loopback port, intercepts API calls with synthetic responses, validates the synthetic authentication header and blocks all other network destinations. It does not load an existing browser profile or use a customer API key.
 

@@ -53,6 +53,17 @@ test('unconfigured setup is read-only and explains the current instrumentation b
   expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual(['/live', '/', '/incidents']);
 });
 
+test('Langfuse setup explains the source path and keeps optional settings out of the first step', async () => {
+  await render();
+  expect(container.querySelector('h1').textContent).toBe('Connections');
+  expect(container.textContent).toContain('Langfuse connection');
+  expect(container.querySelectorAll('[aria-label="How Langfuse data reaches Sillage"] > li')).toHaveLength(3);
+  expect(container.textContent).toContain('It does not connect your application to Langfuse');
+  expect(container.querySelector('#connection-rules').open).toBe(false);
+  expect(container.querySelector('#connection-notifications').open).toBe(false);
+  expect(container.querySelector('#monitoring-policy-title')).not.toBeNull();
+});
+
 test('configured but unchecked never becomes verified or active monitoring', async () => {
   guardianApi.getMonitoring.mockResolvedValue({ data: monitoring({ status: 'not_polled', read_status: null, source_watermark: null,
     stale: true, last_attempt_at: null, processing_watermark: null }) });

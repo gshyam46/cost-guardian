@@ -4,18 +4,35 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
+const { createHash } = require('node:crypto');
 
 const args = process.argv.slice(2);
 if (!args.length || args.includes('--help')) {
-  console.log('Usage: node tools/browser_smoke.cjs --playwright <installed playwright module directory>');
+  console.log('Usage: node tools/browser_smoke.cjs --playwright <installed playwright module directory> [--static-dir <production build>] [--report-dir <tools/reports directory>]');
   process.exit(0);
 }
-if (args.length !== 2 || args[0] !== '--playwright') throw new Error('Expected explicit --playwright module directory');
-const { chromium } = require(path.resolve(args[1]));
+const options = new Map();
+for (let index = 0; index < args.length; index += 2) {
+  const name = args[index], value = args[index + 1];
+  if (!['--playwright', '--static-dir', '--report-dir'].includes(name) || !value || value.startsWith('--') || options.has(name)) {
+    throw new Error('Expected unique --playwright, --static-dir and --report-dir path arguments');
+  }
+  options.set(name, value);
+}
+if (!options.has('--playwright')) throw new Error('Expected explicit --playwright module directory');
 const root = path.resolve(__dirname, '..');
-const build = path.join(root, 'apps/guardian/frontend/build');
-const reports = path.join(root, 'tools/reports/browser-providers');
-assert(fs.existsSync(path.join(build, 'index.html')), 'Build Guardian before running the browser smoke');
+const wheelName = 'sillage_observe-0.2.0-py3-none-any.whl';
+const wheelPath = path.join(root, 'packages/sillage-python/dist', wheelName);
+const build = options.has('--static-dir') ? path.resolve(options.get('--static-dir')) : path.join(root, 'apps/guardian/frontend/build');
+const reports = options.has('--report-dir') ? path.resolve(options.get('--report-dir')) : path.join(root, 'tools/reports/browser-providers');
+const reportRoot = path.join(root, 'tools/reports');
+assert(reports.startsWith(reportRoot + path.sep), 'Browser reports must stay inside tools/reports');
+assert(fs.existsSync(path.join(build, 'index.html')), 'Build Sillage before running the browser smoke');
+assert(fs.existsSync(wheelPath), 'Build the Sillage Python wheel before running the browser smoke');
+const wheelBytes = fs.readFileSync(wheelPath);
+assert(wheelBytes.length > 0 && wheelBytes.length <= 2 * 1024 * 1024, 'Python wheel is outside the supported download bound');
+const wheelSha256 = createHash('sha256').update(wheelBytes).digest('hex');
+const { chromium } = require(path.resolve(options.get('--playwright')));
 fs.mkdirSync(reports, { recursive: true });
 
 const now = new Date().toISOString();
@@ -121,6 +138,18 @@ const routeErrors = [];
 const server = http.createServer((req, res) => {
   try {
     const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+    // Chromium can repeat an attachment navigation outside Playwright routing.
+    // This synthetic server must serve the same fixed artifact on that request;
+    // returning the SPA fallback would download HTML under the wheel filename.
+    // Real authentication and response bytes are verified by native acceptance.
+    if (pathname === '/api/guardian/integrations/python.whl') {
+      if (authMode !== 'oidc' || accessMode !== 'valid' || req.method !== 'GET') {
+        res.writeHead(401, { 'Cache-Control': 'no-store' }).end(); return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Cache-Control': 'no-store',
+        'Content-Disposition': `attachment; filename="${wheelName}"` });
+      res.end(wheelBytes); return;
+    }
     let file = path.resolve(build, '.' + pathname);
     if (!file.startsWith(build + path.sep) && file !== build) {
       res.writeHead(403).end(); return;
@@ -139,6 +168,11 @@ const server = http.createServer((req, res) => {
     const origin = `http://127.0.0.1:${server.address().port}`;
     browser = await chromium.launch({ channel: 'msedge', headless: true });
     const context = await browser.newContext({ viewport: { width: 1440, height: 1050 }, serviceWorkers: 'block' });
+    const openSetupSection = async id => {
+      const section = page.locator('#' + id);
+      await section.waitFor({ state: 'attached' });
+      if (await section.getAttribute('open') === null) await section.locator(':scope > summary').click();
+    };
     await context.addInitScript(() => {
       // Seed once per isolated context. Reload must preserve actual disconnect,
       // rejected-key removal and newly verified persistence behavior.
@@ -223,6 +257,14 @@ const server = http.createServer((req, res) => {
             full_header_matches_fixture: fullHeaders['x-guardian-key'] === 'browser-smoke-key',
             aborted: route.request().failure()?.errorText === 'net::ERR_ABORTED' }));
           assert.fail(`Protected credential mismatch (${scenario}, ${url.pathname}, ${route.request().method()})`);
+        }
+        if (url.pathname === '/api/guardian/integrations/python.whl') {
+          assert.equal(authMode, 'oidc');
+          assert.equal(route.request().method(), 'GET');
+          return route.fulfill({ status: 200, body: wheelBytes, headers: {
+            'content-type': 'application/octet-stream', 'cache-control': 'no-store',
+            'content-disposition': `attachment; filename="${wheelName}"`,
+          } });
         }
         if (url.pathname === '/api/guardian/notifications') {
           assert.equal(route.request().method(), 'GET');
@@ -413,8 +455,10 @@ const server = http.createServer((req, res) => {
     assert.equal(seen[0].path, '/api/guardian/auth/config', 'Stored access started before auth mode discovery');
     assert.equal(seen[1].path, '/api/guardian/access', 'Protected reads started before restored access validation');
     assert((await page.locator('body').innerText()).includes('Unknown'));
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'partial-desktop.png'), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'partial-mobile.png'), fullPage: true });
 
     scenario = 'rejected';
@@ -429,9 +473,11 @@ const server = http.createServer((req, res) => {
     await page.reload();
     await page.getByText('Telemetry is unavailable.', { exact: true }).waitFor();
     assert(!(await page.locator('body').innerText()).includes('No LLM calls were returned'));
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'unavailable-mobile.png'), fullPage: true });
     await page.goto(origin + '/');
     await page.getByText('Ingestion needs attention: stale.', { exact: true }).waitFor();
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'monitoring-mobile.png'), fullPage: true });
 
     scenario = 'run-empty';
@@ -439,11 +485,13 @@ const server = http.createServer((req, res) => {
     await page.getByText('No generation calls observed in this query window. This does not establish that the trace is missing.', { exact: true }).waitFor();
     assert(!(await page.locator('body').innerText()).includes('$0.00'));
     assert((await page.locator('body').innerText()).includes('last 168 hours'));
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'empty-run-mobile.png'), fullPage: true });
     scenario = 'run-partial';
     await page.reload();
     await page.getByText('No accepted generation calls could be established from this partial read. Trace existence remains undetermined.', { exact: true }).waitFor();
     assert(!(await page.locator('body').innerText()).includes('No generation calls observed in this query window.'));
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'partial-run-mobile.png'), fullPage: true });
 
     scenario = 'ledger-healthy';
@@ -457,6 +505,7 @@ const server = http.createServer((req, res) => {
     assert(!healthyText.includes('Hourly accounting is provisional.'));
     assert(!healthyText.includes('Ingestion needs attention:'));
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Healthy mobile overview overflows horizontally');
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'ledger-healthy-mobile.png'), fullPage: true });
 
     scenario = 'ledger-pending';
@@ -473,6 +522,7 @@ const server = http.createServer((req, res) => {
     assert(pendingSpend.includes('1 recorded calls; 1 with unknown cost'));
     assert(!pendingSpend.includes('$0.00') && !pendingSpend.includes('$0.75'));
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Pending mobile overview overflows horizontally');
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'ledger-pending-mobile.png'), fullPage: true });
 
     scenario = 'summary-partial';
@@ -486,11 +536,14 @@ const server = http.createServer((req, res) => {
     assert(!partialSummaryText.includes('0 in the last 7'));
     assert(partialSummaryText.includes('peak 0'));
     assert(!partialSummaryText.includes('peak 1'));
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'partial-summary-mobile.png'), fullPage: true });
 
     scenario = 'summary-failed';
     await page.reload();
-    await page.getByText('Could not load Guardian data. Traffic and cost totals are unavailable.', { exact: true }).waitFor();
+    await page.getByText('Could not load Sillage data. Traffic and cost totals are unavailable for hourly history. Source activity is read separately above.', { exact: true }).waitFor();
+    await page.getByText('Captured calls (24h)', { exact: true }).waitFor();
+    assert.equal(await page.getByText('Captured calls (24h)', { exact: true }).locator('..').locator('p').nth(1).innerText(), '2');
     assert(!(await page.locator('body').innerText()).includes('Open incidents'));
 
     scenario = 'incidents-empty';
@@ -502,6 +555,7 @@ const server = http.createServer((req, res) => {
     await page.reload();
     await page.getByRole('alert').getByText('Could not load incidents.', { exact: true }).waitFor();
     assert(!(await page.locator('body').innerText()).includes('No open incidents'));
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'incidents-unavailable-mobile.png'), fullPage: true });
     scenario = 'incidents-ready';
     await page.getByRole('button', { name: 'Retry incidents', exact: true }).click();
@@ -513,6 +567,7 @@ const server = http.createServer((req, res) => {
     await page.getByRole('alert').getByText('Could not refresh incidents.', { exact: true }).waitFor();
     assert((await page.locator('body').innerText()).includes('Showing the last successful response for this filter from'));
     assert((await page.locator('body').innerText()).includes(incident.title));
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'incidents-stale-mobile.png'), fullPage: true });
 
     scenario = 'incidents-filter-failed';
@@ -530,14 +585,17 @@ const server = http.createServer((req, res) => {
 
     scenario = 'setup-unconfigured';
     await page.goto(origin + '/setup');
-    await page.getByRole('heading', { name: 'Setup and monitoring', exact: true }).waitFor();
+await page.getByRole('heading', { name: 'Connections', exact: true }).waitFor();
+    await openSetupSection('connection-rules');
     await page.getByText('Local shared-key access shows monitoring rules read-only.', { exact: true }).waitFor();
     assert.equal(await page.getByRole('form', { name: 'Edit monitoring rules' }).count(), 0);
     await page.getByText('Not configured', { exact: true }).waitFor();
+    await page.getByText('Manage this source connection', { exact: true }).click();
     assert((await page.locator('body').innerText()).includes('source modes cannot be switched here'));
     assert(!(await page.locator('body').innerText()).includes('Worker diagnostics are stale.'));
     assert.equal(await page.locator('input').count(), 0);
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Setup mobile view overflows horizontally');
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'setup-unconfigured-mobile.png'), fullPage: true });
 
     scenario = 'setup-unchecked';
@@ -550,6 +608,7 @@ const server = http.createServer((req, res) => {
     scenario = 'setup-empty';
     await page.reload();
     await page.getByText('The latest successful read returned no observations. This does not establish that the project has never had traffic.', { exact: true }).waitFor();
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'setup-empty-mobile.png'), fullPage: true });
 
     scenario = 'setup-pending';
@@ -560,6 +619,7 @@ const server = http.createServer((req, res) => {
     assert.equal(await setupDetail('Hourly totals awaiting rebuild'), '2');
     assert.equal(await setupDetail('Rejected or conflicting records'), '1');
     assert.notEqual(await setupDetail('Last source checkpoint'), await setupDetail('Last processing checkpoint'));
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'setup-pending-mobile.png'), fullPage: true });
 
     scenario = 'setup-stale';
@@ -576,6 +636,7 @@ const server = http.createServer((req, res) => {
     await page.reload();
     await page.getByRole('alert').getByText('Monitoring diagnostics are unavailable.', { exact: true }).waitFor();
     assert.equal(await page.evaluate(() => localStorage.getItem('guardian_api_key')), 'browser-smoke-key');
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'setup-unavailable-mobile.png'), fullPage: true });
     scenario = 'setup-pending';
     await page.getByRole('button', { name: 'Retry setup check', exact: true }).click();
@@ -584,31 +645,32 @@ const server = http.createServer((req, res) => {
 
     const beforeDisconnect = navigations;
     await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
-    await page.getByLabel('Guardian API key', { exact: true }).waitFor();
+    await page.getByLabel('Workspace access key', { exact: true }).waitFor();
     assert.equal(navigations, beforeDisconnect, 'Disconnect depended on a page reload');
     assert.equal(await page.evaluate(() => localStorage.getItem('guardian_api_key')), null);
-    assert.equal(await page.getByRole('heading', { name: 'Setup and monitoring', exact: true }).count(), 0);
+    assert.equal(await page.getByRole('heading', { name: 'Connections', exact: true }).count(), 0);
 
     accessMode = 'rejected';
     let beforeAccess = seen.length;
-    await page.getByLabel('Guardian API key', { exact: true }).fill('browser-rejected-key');
+    await page.getByLabel('Workspace access key', { exact: true }).fill('browser-rejected-key');
     await page.getByRole('button', { name: 'Connect', exact: true }).click();
-    await page.getByRole('alert').getByText('That key was rejected by the Guardian API.', { exact: true }).waitFor();
+    await page.getByRole('alert').getByText('That key was rejected by the Sillage API.', { exact: true }).waitFor();
     assert.equal(await page.evaluate(() => localStorage.getItem('guardian_api_key')), null, 'Rejected candidate was persisted');
     assert(seen.slice(beforeAccess).every(request => request.path === '/api/guardian/access'), 'Rejected candidate mounted protected data');
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'connect-rejected-mobile.png'), fullPage: true });
 
     accessMode = 'held';
     let releaseAccess;
     accessGate = new Promise(resolve => { releaseAccess = resolve; });
-    await page.getByLabel('Guardian API key', { exact: true }).fill('browser-smoke-key');
+    await page.getByLabel('Workspace access key', { exact: true }).fill('browser-smoke-key');
     await page.getByRole('button', { name: 'Connect', exact: true }).click();
     await page.getByRole('button', { name: 'Connecting...', exact: true }).waitFor();
     assert.equal(await page.evaluate(() => localStorage.getItem('guardian_api_key')), null, 'Unverified candidate was persisted');
-    assert.equal(await page.getByRole('heading', { name: 'Setup and monitoring', exact: true }).count(), 0);
+    assert.equal(await page.getByRole('heading', { name: 'Connections', exact: true }).count(), 0);
     accessMode = 'valid';
     releaseAccess();
-    await page.getByRole('heading', { name: 'Setup and monitoring', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'Connections', exact: true }).waitFor();
     await page.getByText('Work pending', { exact: true }).waitFor();
     assert.equal(new URL(page.url()).pathname, '/setup', 'Verified access lost requested deep link');
     assert.equal(await page.evaluate(() => localStorage.getItem('guardian_api_key')), 'browser-smoke-key');
@@ -617,7 +679,7 @@ const server = http.createServer((req, res) => {
     await page.evaluate(() => localStorage.setItem('guardian_api_key', 'browser-expired-key'));
     beforeAccess = seen.length;
     await page.reload();
-    await page.getByRole('alert').getByText('That key was rejected by the Guardian API.', { exact: true }).waitFor();
+    await page.getByRole('alert').getByText('That key was rejected by the Sillage API.', { exact: true }).waitFor();
     assert.equal(await page.evaluate(() => localStorage.getItem('guardian_api_key')), null, 'Rejected restored key was retained');
     assert(seen.slice(beforeAccess).every(request => ['/api/guardian/access', '/api/guardian/auth/config'].includes(request.path)), 'Expired restored key mounted protected data');
 
@@ -627,8 +689,9 @@ const server = http.createServer((req, res) => {
     await page.reload();
     await page.getByRole('button', { name: 'Retry access', exact: true }).waitFor();
     assert.equal(await page.evaluate(() => localStorage.getItem('guardian_api_key')), 'browser-smoke-key', 'Transient access failure erased stored key');
-    assert.equal(await page.getByRole('heading', { name: 'Setup and monitoring', exact: true }).count(), 0);
+    assert.equal(await page.getByRole('heading', { name: 'Connections', exact: true }).count(), 0);
     assert(seen.slice(beforeAccess).every(request => ['/api/guardian/access', '/api/guardian/auth/config'].includes(request.path)), 'Unavailable access mounted protected data');
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'access-unavailable-mobile.png'), fullPage: true });
 
     // Valid access remains usable while a separately queried summary is partial.
@@ -638,35 +701,35 @@ const server = http.createServer((req, res) => {
     accessMode = 'valid';
     await page.getByRole('button', { name: 'Retry access', exact: true }).click();
     await page.getByText('Recent incident count incomplete', { exact: true }).waitFor();
-    assert.equal(await page.getByLabel('Guardian API key', { exact: true }).count(), 0);
+    assert.equal(await page.getByLabel('Workspace access key', { exact: true }).count(), 0);
     assert.equal(await page.evaluate(() => localStorage.getItem('guardian_api_key')), 'browser-smoke-key');
 
     scenario = 'setup-access-rejected';
     await page.goto(origin + '/setup');
-    await page.getByLabel('Guardian API key', { exact: true }).waitFor();
+    await page.getByLabel('Workspace access key', { exact: true }).waitFor();
     await page.getByRole('alert').getByText('Access was rejected. Connect again to continue.', { exact: true }).waitFor();
     assert.equal(await page.evaluate(() => localStorage.getItem('guardian_api_key')), null);
-    assert.equal(await page.getByRole('heading', { name: 'Setup and monitoring', exact: true }).count(), 0);
+    assert.equal(await page.getByRole('heading', { name: 'Connections', exact: true }).count(), 0);
 
     // A real browser storage event in another tab must unmount this tab's data.
     scenario = 'setup-empty';
-    await page.getByLabel('Guardian API key', { exact: true }).fill('browser-smoke-key');
+    await page.getByLabel('Workspace access key', { exact: true }).fill('browser-smoke-key');
     await page.getByRole('button', { name: 'Connect', exact: true }).click();
-    await page.getByRole('heading', { name: 'Setup and monitoring', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'Connections', exact: true }).waitFor();
     const secondTab = await context.newPage();
     secondTab.on('pageerror', error => browserErrors.push(error.message));
     await secondTab.goto(origin + '/setup');
-    await secondTab.getByRole('heading', { name: 'Setup and monitoring', exact: true }).waitFor();
+    await secondTab.getByRole('heading', { name: 'Connections', exact: true }).waitFor();
     await secondTab.getByRole('button', { name: 'Disconnect', exact: true }).click();
-    await secondTab.getByLabel('Guardian API key', { exact: true }).waitFor();
-    await page.getByLabel('Guardian API key', { exact: true }).waitFor();
-    assert.equal(await page.getByRole('heading', { name: 'Setup and monitoring', exact: true }).count(), 0);
+    await secondTab.getByLabel('Workspace access key', { exact: true }).waitFor();
+    await page.getByLabel('Workspace access key', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('heading', { name: 'Connections', exact: true }).count(), 0);
     await secondTab.close();
 
     scenario = 'config-unavailable';
     beforeAccess = seen.length;
     await page.reload();
-    await page.getByText('Could not load Guardian sign-in configuration. Retry when the service is available.', { exact: true }).waitFor();
+    await page.getByText('Could not load Sillage sign-in configuration. Retry when the service is available.', { exact: true }).waitFor();
     assert(seen.slice(beforeAccess).every(request => request.path === '/api/guardian/auth/config'));
     assert.equal(await page.locator('input').count(), 0);
 
@@ -685,6 +748,7 @@ const server = http.createServer((req, res) => {
     await page.getByRole('button', { name: 'Sign in with your organization', exact: true }).waitFor();
     assert.equal(await page.locator('input').count(), 0);
     assert.equal(await page.evaluate(() => window.guardianLegacyKeyReads), 0);
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'oidc-entry-mobile.png'), fullPage: true });
 
     scenario = 'oidc-viewer';
@@ -699,12 +763,14 @@ const server = http.createServer((req, res) => {
     assert.equal(await page.evaluate(() => window.guardianLegacyKeyReads), 0);
     assert.equal(await page.evaluate(() => sessionStorage.getItem('guardian_login_return')), null);
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Viewer mobile incident detail overflows horizontally');
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'oidc-viewer-mobile.png'), fullPage: true });
 
     oidcRole = 'operator';
     scenario = 'oidc-operator';
     await page.reload();
     await page.getByRole('button', { name: 'Mark resolved', exact: true }).waitFor();
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'oidc-operator-mobile.png'), fullPage: true });
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Operator mobile incident detail overflows horizontally');
     await page.getByRole('button', { name: 'Mark resolved', exact: true }).click();
@@ -721,6 +787,7 @@ const server = http.createServer((req, res) => {
     assert((await page.locator('body').innerText()).includes('session may still be active'));
     assert(oidcSession, 'A failed synthetic logout revoked the fixture session');
     assert.equal(navigations, beforeOidcLogout, 'OIDC logout depended on reloading');
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'oidc-logout-failed-mobile.png'), fullPage: true });
     scenario = 'oidc-logout-retry';
     await page.getByRole('button', { name: 'Retry sign-out', exact: true }).click();
@@ -731,25 +798,25 @@ const server = http.createServer((req, res) => {
     scenario = 'oidc-expired-data';
     await page.getByRole('button', { name: 'Sign in with your organization', exact: true }).click();
     await page.getByRole('heading', { name: incident.title, exact: true }).waitFor();
-    await page.getByRole('link', { name: 'Setup', exact: true }).click();
-    await page.getByText('Your Guardian session has ended. Sign in again to continue.', { exact: true }).waitFor();
-    assert.equal(await page.getByRole('heading', { name: 'Setup and monitoring', exact: true }).count(), 0);
+    await page.getByRole('link', { name: 'Connections', exact: true }).click();
+    await page.getByText('Your Sillage session has ended. Sign in again to continue.', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('heading', { name: 'Connections', exact: true }).count(), 0);
     assert.equal(await page.evaluate(() => window.guardianLegacyKeyReads), 0);
 
     scenario = 'oidc-access-unavailable';
     await page.reload();
     await page.getByRole('button', { name: 'Retry access', exact: true }).waitFor();
-    assert.equal(await page.getByRole('heading', { name: 'Setup and monitoring', exact: true }).count(), 0);
+    assert.equal(await page.getByRole('heading', { name: 'Connections', exact: true }).count(), 0);
     assert.equal(await page.getByRole('button', { name: 'Use a different key', exact: true }).count(), 0);
     scenario = 'setup-empty';
     await page.getByRole('button', { name: 'Retry access', exact: true }).click();
-    await page.getByRole('heading', { name: 'Setup and monitoring', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'Connections', exact: true }).waitFor();
 
     oidcRole = 'viewer';
     scenario = 'oidc-invalid-access';
     await page.reload();
     await page.getByRole('button', { name: 'Retry access', exact: true }).waitFor();
-    assert.equal(await page.getByRole('heading', { name: 'Setup and monitoring', exact: true }).count(), 0);
+    assert.equal(await page.getByRole('heading', { name: 'Connections', exact: true }).count(), 0);
     assert.equal(await page.getByRole('button', { name: 'Use a different key', exact: true }).count(), 0);
 
     scenario = 'oidc-unsafe-return';
@@ -776,7 +843,7 @@ const server = http.createServer((req, res) => {
     const oidcTab = await context.newPage();
     oidcTab.on('pageerror', error => browserErrors.push(error.message));
     await oidcTab.goto(origin + '/setup', { waitUntil: 'domcontentloaded' });
-    await oidcTab.getByRole('heading', { name: 'Setup and monitoring', exact: true }).waitFor();
+    await oidcTab.getByRole('heading', { name: 'Connections', exact: true }).waitFor();
     await oidcTab.getByRole('button', { name: 'Sign out', exact: true }).click();
     await oidcTab.getByRole('button', { name: 'Sign in with your organization', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Sign in with your organization', exact: true }).waitFor();
@@ -787,16 +854,65 @@ const server = http.createServer((req, res) => {
     captureMode = 'direct'; oidcRole = 'owner'; scenario = 'direct-owner';
     await page.getByRole('button', { name: 'Sign in with your organization', exact: true }).click();
     await page.getByText('Open incidents', { exact: true }).waitFor();
-    await page.getByRole('link', { name: 'Setup', exact: true }).click();
+    await page.getByRole('link', { name: 'Connections', exact: true }).click();
     await page.getByRole('heading', { name: 'Send events directly', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Create ingestion key', exact: true }).waitFor();
+    await openSetupSection('connection-verify');
     assert((await page.locator('body').innerText()).includes('No real event receipt is recorded'));
     assert((await page.locator('body').innerText()).includes('Worker has not reported yet'));
     assert(!(await page.locator('body').innerText()).includes('Last source checkpoint'));
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Direct owner mobile setup overflows horizontally');
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'direct-owner-mobile.png'), fullPage: true });
 
+    scenario = 'python-launcher-onboarding';
+    await openSetupSection('connection-integrate');
+    await page.getByRole('heading', { name: 'Install once. Run your app with Sillage.', exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Python: install + run', exact: true }).getAttribute('aria-pressed'), 'true');
+    assert(!(await page.getByRole('heading', { name: 'Connect your OpenAI calls', exact: true }).isVisible()));
+    const installCommands = page.getByLabel('Install Sillage', { exact: true });
+    const configurationCommands = page.getByLabel('Sillage server configuration', { exact: true });
+    const launchCommands = page.getByLabel('Start your app with Sillage', { exact: true });
+    assert.equal(await installCommands.innerText(), `python -m pip install './${wheelName}[openinference]'`);
+    assert((await configurationCommands.innerText()).includes(`$env:SILLAGE_URL = '${origin}'`));
+    assert((await configurationCommands.innerText()).includes("$env:SILLAGE_ALLOW_LOCAL = 'true'"));
+    assert((await configurationCommands.innerText()).includes('<your application key>'));
+    assert.equal(await page.getByLabel('Check your Python environment', { exact: true }).innerText(), 'sillage-run --instrumentation openinference --instrumentors auto --check');
+    assert.equal(await launchCommands.innerText(), 'sillage-run --instrumentation openinference --instrumentors auto -- python -m uvicorn server:app');
+    await page.locator('#launcher-layer').selectOption('litellm');
+    assert((await launchCommands.innerText()).includes('--instrumentors litellm'));
+    await page.locator('#launcher-capture').selectOption('native');
+    assert.equal(await installCommands.innerText(), `python -m pip install ./${wheelName}`);
+    assert.equal(await launchCommands.innerText(), 'sillage-run -- python -m uvicorn server:app');
+    await page.locator('#launcher-capture').selectOption('openinference');
+    await page.locator('#launcher-layer').selectOption('auto');
+    const packageLink = page.getByRole('link', { name: 'Download Python package', exact: true });
+    assert.equal(await packageLink.getAttribute('href'), origin + '/api/guardian/integrations/python.whl');
+    const wheelDownloadPending = page.waitForEvent('download');
+    await packageLink.click();
+    const wheelDownload = await wheelDownloadPending;
+    assert.equal(wheelDownload.suggestedFilename(), wheelName);
+    const downloadedWheel = path.join(reports, wheelName);
+    await wheelDownload.saveAs(downloadedWheel);
+    assert.equal(createHash('sha256').update(fs.readFileSync(downloadedWheel)).digest('hex'), wheelSha256);
+    await page.getByLabel('Terminal', { exact: true }).selectOption('bash');
+    assert((await configurationCommands.innerText()).includes(`export SILLAGE_URL='${origin}'`));
+    await page.getByLabel('How you start your app', { exact: true }).selectOption('script');
+    assert.equal(await launchCommands.innerText(), 'sillage-run --instrumentation openinference --instrumentors auto -- python app.py');
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
+    await page.getByRole('button', { name: 'Copy configure commands', exact: true }).click();
+    await page.getByText('Configuration template copied.', { exact: true }).waitFor();
+    assert.equal((await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, '\n'), await configurationCommands.innerText());
+    assert(!(await configurationCommands.innerText()).includes('browser-smoke-key'));
+    assert(!(await configurationCommands.innerText()).includes(csrfToken));
+    assert.equal(seen.filter(request => request.scenario === scenario && request.method === 'POST').length, 0,
+      'Downloading or copying launcher instructions sent application traffic');
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Python launcher overflows mobile');
+    await page.screenshot({ path: path.join(reports, 'python-launcher-mobile.png'), fullPage: true });
+    await page.getByLabel('Terminal', { exact: true }).selectOption('powershell');
+    await page.getByLabel('How you start your app', { exact: true }).selectOption('uvicorn');
     scenario = 'provider-recipes';
+    await page.getByRole('button', { name: 'Manual Python / Node', exact: true }).click();
     const providerHeading = page.getByRole('heading', { name: 'Connect your OpenAI calls', exact: true });
     await providerHeading.waitFor();
     const providerCard = providerHeading.locator('..').locator('..');
@@ -806,7 +922,7 @@ const server = http.createServer((req, res) => {
     await page.getByText('Token usage is reported; USD cost stays unknown.', { exact: true }).waitFor();
     assert.equal(await page.getByRole('tab', { name: 'Python', exact: true }).getAttribute('aria-selected'), 'true');
     assert((await recipe.innerText()).includes('openai_call'));
-    const advanced = page.getByText('Advanced: Guardian JSON version 1 · Node fetch example', { exact: true });
+    const advanced = page.getByText('Advanced: Sillage JSON version 1 · Node fetch example', { exact: true });
     assert.equal(await advanced.locator('..').getAttribute('open'), null);
     const recipeVariants = new Set();
     for (const language of ['Python', 'Node']) {
@@ -860,6 +976,7 @@ const server = http.createServer((req, res) => {
     await page.getByRole('button', { name: 'Dismiss key', exact: true }).click();
     assert.equal(await page.getByLabel('One-time ingestion key', { exact: true }).count(), 0);
     assert(!(await page.locator('body').innerText()).includes(shownKey));
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'direct-test-only-mobile.png'), fullPage: true });
 
     scenario = 'direct-revoke-failed';
@@ -894,6 +1011,8 @@ const server = http.createServer((req, res) => {
 
     scenario = 'direct-viewer'; oidcRole = 'viewer';
     await page.reload();
+    await openSetupSection('connection-keys');
+    await openSetupSection('connection-verify');
     await page.getByText('focus-key', { exact: true }).waitFor();
     assert.equal(await page.getByRole('button', { name: 'Create ingestion key', exact: true }).count(), 0);
     assert.equal(await page.getByRole('button', { name: 'Revoke focus-key', exact: true }).count(), 0);
@@ -902,19 +1021,21 @@ const server = http.createServer((req, res) => {
     Object.assign(captureStatus, { last_received_at: now, received_events: 3, pending_events: 2,
       processed_events: 1, conflicted_events: 1, last_processed_at: now, worker_status: 'stale' });
     await page.getByRole('button', { name: 'Retry setup check', exact: true }).click();
-    await page.getByText('Worker heartbeat is stale', { exact: true }).waitFor();
-    const captureDetail = async label => page.getByText(label, { exact: true }).locator('..').locator('dd').innerText();
+    const captureVerification = page.locator('#connection-verify');
+    await captureVerification.getByText('Worker heartbeat is stale', { exact: true }).waitFor();
+    const captureDetail = async label => captureVerification.getByText(label, { exact: true }).locator('..').locator('dd').innerText();
     assert.equal(await captureDetail('Events awaiting processing'), '2');
     assert.equal(await captureDetail('Processed events'), '1');
     assert.equal(await captureDetail('Conflicted events'), '1');
     assert(!(await page.locator('body').innerText()).includes('Monitoring is active'));
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Direct pending mobile setup overflows horizontally');
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'direct-pending-mobile.png'), fullPage: true });
 
     scenario = 'direct-processed';
     Object.assign(captureStatus, { pending_events: 0, processed_events: 3, conflicted_events: 0, worker_status: 'current' });
     await page.getByRole('button', { name: 'Retry setup check', exact: true }).click();
-    await page.getByText('Recent worker heartbeat', { exact: true }).waitFor();
+    await captureVerification.getByText('Recent worker heartbeat', { exact: true }).waitFor();
     assert.equal(await captureDetail('Processed events'), '3');
     scenario = 'direct-capture-unavailable';
     await page.getByRole('button', { name: 'Retry setup check', exact: true }).click();
@@ -922,11 +1043,12 @@ const server = http.createServer((req, res) => {
     assert.equal(await captureDetail('Processed events'), '3');
     scenario = 'direct-live';
     await page.getByRole('link', { name: 'Live activity', exact: true }).click();
-    await page.getByText(/Completed LLM calls captured directly by Guardian/).waitFor();
+    await page.getByText(/Completed LLM calls captured directly by Sillage/).waitFor();
     assert(!(await page.locator('body').innerText()).includes('Observed LLM generations from Langfuse'));
 
     scenario = 'policy-owner'; oidcRole = 'owner';
     await page.goto(origin + '/setup', { waitUntil: 'domcontentloaded' });
+    await openSetupSection('connection-rules');
     await page.getByText('Default monitoring rules', { exact: true }).waitFor();
     const costInput = page.getByLabel('Maximum cost per call (USD)', { exact: true });
     const latencyInput = page.getByLabel('Maximum duration per call (milliseconds)', { exact: true });
@@ -947,6 +1069,7 @@ const server = http.createServer((req, res) => {
     await page.getByText('Above $0 USD', { exact: true }).waitFor();
     assert((await page.locator('body').innerText()).includes('These rules create incidents; notification delivery is configured separately, and spending limits are not enforced.'));
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Owner policy editor overflows on mobile');
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'policy-owner-zero-mobile.png'), fullPage: true });
     await page.locator('[aria-labelledby="monitoring-policy-title"]').screenshot({ path: path.join(reports, 'policy-rules-card-mobile.png') });
 
@@ -962,6 +1085,7 @@ const server = http.createServer((req, res) => {
     await saveRules.click();
     await page.getByText('Another save changed the rules. Reload the saved rules before saving your edits.', { exact: true }).waitFor();
     assert(await saveRules.isDisabled()); assert.equal(await costInput.inputValue(), '0.04');
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'policy-conflict-mobile.png'), fullPage: true });
     scenario = 'policy-ready';
     await reloadRules.click();
@@ -969,7 +1093,7 @@ const server = http.createServer((req, res) => {
     assert.equal(await costInput.inputValue(), '0.04');
     scenario = 'policy-save-lost';
     await saveRules.click();
-    await page.getByText('The save was not confirmed. It may have reached Guardian. Reload the saved rules before trying again.', { exact: true }).waitFor();
+    await page.getByText('The save was not confirmed. It may have reached Sillage. Reload the saved rules before trying again.', { exact: true }).waitFor();
     assert(await saveRules.isDisabled());
     assert.equal(seen.filter(request => request.scenario === scenario && request.method === 'PUT').length, 1);
     assert.equal(policyRevision, 4);
@@ -984,6 +1108,7 @@ const server = http.createServer((req, res) => {
     await page.getByText('Saved revision 4', { exact: true }).waitFor();
     assert(await saveRules.isDisabled());
     await page.reload();
+    await openSetupSection('connection-rules');
     await page.getByText('Monitoring rules are unavailable. Reload the rules to check the current settings.', { exact: true }).waitFor();
     assert.equal(await page.getByRole('form', { name: 'Edit monitoring rules' }).count(), 0);
     assert.equal(await page.getByText('Saved revision 4', { exact: true }).count(), 0);
@@ -997,12 +1122,16 @@ const server = http.createServer((req, res) => {
     await costInput.fill('0.09');
     oidcRole = 'operator'; scenario = 'policy-role-loss';
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await page.getByText('Only the project owner can edit monitoring rules.', { exact: true }).waitFor({ state: 'attached' });
+    await openSetupSection('connection-rules');
     await page.getByText('Only the project owner can edit monitoring rules.', { exact: true }).waitFor();
     assert.equal(await costInput.count(), 0); assert.equal(await saveRules.count(), 0);
     assert.equal(seen.filter(request => request.scenario === scenario && request.method === 'PUT').length, 0);
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'policy-operator-readonly-mobile.png'), fullPage: true });
     oidcRole = 'viewer'; scenario = 'policy-viewer';
     await page.reload();
+    await openSetupSection('connection-rules');
     await page.getByText('Only the project owner can edit monitoring rules.', { exact: true }).waitFor();
     assert.equal(await saveRules.count(), 0);
 
@@ -1011,6 +1140,7 @@ const server = http.createServer((req, res) => {
     await page.getByText('Observed call cost $0.08 exceeded the saved $0.05 limit.', { exact: true }).waitFor();
     await page.getByText('Evaluated with saved policy revision 1. Later rule changes do not change this evidence.', { exact: true }).waitFor();
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Configured incident evidence overflows on mobile');
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'policy-incident-evidence-mobile.png'), fullPage: true });
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.locator('[aria-label="Monitoring rule evidence"]').screenshot({ path: path.join(reports, 'policy-threshold-evidence-desktop.png') });
@@ -1030,6 +1160,7 @@ const server = http.createServer((req, res) => {
     // exercises actual owner HTTP, transactions and the localhost receiver.
     oidcRole = 'owner'; scenario = 'notification-owner';
     await page.goto(origin + '/setup', { waitUntil: 'domcontentloaded' });
+    await openSetupSection('connection-notifications');
     const notificationCard = page.locator('[aria-labelledby="notification-setup-title"]');
     const refreshNotifications = page.getByRole('button', { name: 'Refresh notification status', exact: true });
     const sendTest = page.getByRole('button', { name: 'Send test notification', exact: true });
@@ -1076,6 +1207,7 @@ const server = http.createServer((req, res) => {
     await page.getByText('Accepted by Slack', { exact: true }).waitFor();
     await page.setViewportSize({ width: 1280, height: 1000 });
     await page.getByRole('heading', { name: 'Notification history', exact: true }).scrollIntoViewIfNeeded();
+    await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
     await page.screenshot({ path: path.join(reports, 'notification-incident-history-desktop.png'), fullPage: true });
     await page.getByRole('link', { name: 'Inspect captured run synthetic-policy-run', exact: true }).click();
     await page.getByRole('heading', { name: 'Trace synthetic-policy-run', exact: true }).waitFor();
@@ -1088,9 +1220,10 @@ const server = http.createServer((req, res) => {
 
     scenario = 'notification-action-lost';
     await page.goto(origin + '/setup', { waitUntil: 'domcontentloaded' });
+    await openSetupSection('connection-notifications');
     await notificationCard.getByText('New incident notifications enabled', { exact: true }).waitFor();
     await disableNotifications.click();
-    await notificationCard.getByText('The notification action was not confirmed. It may have reached Guardian. Refresh before trying again.', { exact: true }).waitFor();
+    await notificationCard.getByText('The notification action was not confirmed. It may have reached Sillage. Refresh before trying again.', { exact: true }).waitFor();
     assert(await disableNotifications.isDisabled()); assert(await sendTest.isDisabled());
     assert.equal(seen.filter(request => request.scenario === scenario && request.method === 'POST').length, 1);
     scenario = 'notification-ready';
@@ -1109,6 +1242,7 @@ const server = http.createServer((req, res) => {
     await notificationCard.getByText('Showing previously fetched notification status; the current state is unconfirmed.', { exact: true }).waitFor();
     assert(await enableNotifications.isDisabled());
     await page.reload();
+    await openSetupSection('connection-notifications');
     await notificationCard.getByText('Notification status is unavailable. Refresh to check the current settings.', { exact: true }).waitFor();
     assert.equal(await sendTest.count(), 0);
     scenario = 'notification-malformed';
@@ -1126,6 +1260,7 @@ const server = http.createServer((req, res) => {
     notificationWorker.status = 'blocked';
     const oldPending = delivery('a'.repeat(64)); notificationDeliveries.unshift(oldPending);
     await page.goto(origin + '/setup', { waitUntil: 'domcontentloaded' });
+    await openSetupSection('connection-notifications');
     await notificationCard.getByText('Slack destination changed', { exact: true }).waitFor();
     assert(await enableNotifications.isDisabled());
     await sendTest.click();
@@ -1137,15 +1272,19 @@ const server = http.createServer((req, res) => {
 
     scenario = 'notification-role-loss'; oidcRole = 'operator';
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await notificationCard.getByText('Only the project owner can test, change or retry notifications.', { exact: true }).waitFor({ state: 'attached' });
+    await openSetupSection('connection-notifications');
     await notificationCard.getByText('Only the project owner can test, change or retry notifications.', { exact: true }).waitFor();
     assert.equal(await sendTest.count(), 0); assert.equal(await disableNotifications.count(), 0);
     oidcRole = 'viewer';
     await page.reload();
+    await openSetupSection('connection-notifications');
     await notificationCard.getByText('Only the project owner can test, change or retry notifications.', { exact: true }).waitFor();
     assert.equal(await page.getByRole('button', { name: 'Retry notification', exact: true }).count(), 0);
     authMode = 'api_key';
     await page.evaluate(() => localStorage.setItem('guardian_api_key', 'browser-smoke-key'));
     await page.reload();
+    await openSetupSection('connection-notifications');
     await notificationCard.getByText('Local shared-key access shows notifications read-only.', { exact: true }).waitFor();
     assert.equal(await sendTest.count(), 0);
     assert.equal(seen.filter(request => request.scenario === scenario && request.method === 'POST').length, 0);
@@ -1153,7 +1292,7 @@ const server = http.createServer((req, res) => {
     assert.deepEqual(browserErrors, []);
     assert.deepEqual(routeErrors, []);
     const manifest = JSON.parse(fs.readFileSync(path.join(build, 'asset-manifest.json'), 'utf8'));
-    const report = { ok: true, browser: browser.version(), scenarios: ['partial_desktop_mobile', 'rejected_only_unknown_spend', 'cold_unavailable', 'stale_worker', 'bounded_empty_run', 'undetermined_partial_run', 'ledger_healthy_captured_once', 'ledger_pending_quarantine_unknown_spend', 'partial_summary_utc_zero_peak', 'summary_unavailable', 'incidents_successful_empty', 'incidents_cold_failure_retry', 'incidents_stale_same_filter', 'incidents_filter_failure_retry', 'restored_access_before_protected_reads', 'setup_unconfigured_read_only', 'setup_configured_unchecked', 'setup_empty_latest_read', 'setup_pending_checkpoint_separation', 'setup_stale_unknown', 'setup_unavailable_retry', 'disconnect_without_reload', 'candidate_rejected_not_persisted', 'candidate_verified_before_persist_deeplink', 'restored_expired_key_removed', 'restored_unavailable_retained_retry', 'valid_access_with_partial_summary', 'data_401_unmounts_protected_content', 'cross_tab_disconnect', 'public_config_fail_closed', 'oidc_entry_no_shared_key', 'oidc_viewer_cookie_safe_deeplink', 'oidc_operator_resolution_csrf_origin', 'oidc_logout_failure_closed', 'oidc_logout_retry_revokes', 'oidc_data_expiry_unmounts', 'oidc_access_unavailable_retry', 'oidc_invalid_role_permissions_fail_closed', 'oidc_unsafe_return_rejected', 'oidc_failed_callback_no_loop', 'oidc_cross_tab_logout'], api_transport: 'synthetic_browser_routes', identity_provider: 'synthetic_login_redirect_only', application: 'Guardian production build', bundle: manifest.files['main.js'], mobile_viewport: { width: 390, height: 844 }, real_services: false, checked_at: new Date().toISOString() };
+    const report = { ok: true, browser: browser.version(), scenarios: ['partial_desktop_mobile', 'rejected_only_unknown_spend', 'cold_unavailable', 'stale_worker', 'bounded_empty_run', 'undetermined_partial_run', 'ledger_healthy_captured_once', 'ledger_pending_quarantine_unknown_spend', 'partial_summary_utc_zero_peak', 'summary_unavailable', 'incidents_successful_empty', 'incidents_cold_failure_retry', 'incidents_stale_same_filter', 'incidents_filter_failure_retry', 'restored_access_before_protected_reads', 'setup_unconfigured_read_only', 'setup_configured_unchecked', 'setup_empty_latest_read', 'setup_pending_checkpoint_separation', 'setup_stale_unknown', 'setup_unavailable_retry', 'disconnect_without_reload', 'candidate_rejected_not_persisted', 'candidate_verified_before_persist_deeplink', 'restored_expired_key_removed', 'restored_unavailable_retained_retry', 'valid_access_with_partial_summary', 'data_401_unmounts_protected_content', 'cross_tab_disconnect', 'public_config_fail_closed', 'oidc_entry_no_shared_key', 'oidc_viewer_cookie_safe_deeplink', 'oidc_operator_resolution_csrf_origin', 'oidc_logout_failure_closed', 'oidc_logout_retry_revokes', 'oidc_data_expiry_unmounts', 'oidc_access_unavailable_retry', 'oidc_invalid_role_permissions_fail_closed', 'oidc_unsafe_return_rejected', 'oidc_failed_callback_no_loop', 'oidc_cross_tab_logout'], api_transport: 'synthetic_browser_routes', identity_provider: 'synthetic_login_redirect_only', application: 'Sillage production build', bundle: manifest.files['main.js'], mobile_viewport: { width: 390, height: 844 }, real_services: false, checked_at: new Date().toISOString() };
     report.scenarios.push('direct_owner_no_receipt', 'direct_key_create_one_time', 'direct_test_cookie_free_no_production',
       'direct_key_dismiss', 'direct_revoke_failure_retry', 'direct_lost_create_recovery', 'direct_secret_cleared_on_focus',
       'direct_viewer_read_only', 'direct_pending_stale_worker', 'direct_processed_receipt_distinction',
@@ -1165,16 +1304,22 @@ const server = http.createServer((req, res) => {
       'notification_lost_action_conflict_readback', 'notification_stale_cold_malformed_history_independent',
       'notification_rotated_destination_requires_new_test', 'notification_role_loss_operator_viewer_key_readonly');
     report.scenarios.push('provider_eight_recipes_unknown_cost_no_provider_calls', 'provider_clipboard_safe_advanced_json_and_mobile');
+    report.scenarios.push('python_launcher_default_authenticated_wheel_download', 'python_launcher_origin_shell_target_and_safe_clipboard');
+    report.python_package = { artifact: wheelName, sha256: wheelSha256, exact_artifact_bytes: true,
+      api_transport: 'synthetic_browser_route', default_launcher: true, origin_checked: true,
+      powershell_and_bash: true, script_and_uvicorn: true };
     fs.writeFileSync(path.join(reports, 'report.json'), JSON.stringify(report, null, 2) + '\n');
     console.log(JSON.stringify(report));
   } catch (error) {
     if (page) {
+      await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
       await page.screenshot({ path: path.join(reports, 'failure.png'), fullPage: true }).catch(() => {});
       console.error(JSON.stringify({ diagnostic: 'browser_failure', scenario, accessMode, authMode,
         page_path: new URL(page.url()).pathname, body_text: (await page.locator('body').innerText()).slice(-1500),
         stored_key_present: await page.evaluate(() => !!localStorage.getItem('guardian_api_key')).catch(() => null) }));
     }
     if (page && scenario.startsWith('notification-')) {
+      await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' })).catch(() => {});
       await page.screenshot({ path: path.join(reports, 'notification-failure.png'), fullPage: true }).catch(() => {});
       console.error(JSON.stringify({ scenario, visible_text: (await page.locator('body').innerText()).slice(-6000),
         requests: seen.filter(request => request.scenario === scenario).map(request => ({ path: request.path, method: request.method })) }));

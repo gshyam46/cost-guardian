@@ -59,10 +59,44 @@ jobs:
           path: tools/reports/
           retention-days: 14
 
+  python-integration:
+    name: Python package compatibility / OpenAI ${{ matrix.openai }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        openai: ["1.99.9", "2.54.0"]
+    env:
+      PYTHON_DOTENV_DISABLED: "1"
+      LITELLM_LOCAL_MODEL_COST_MAP: "True"
+      LITELLM_TELEMETRY: "False"
+      LANGCHAIN_TRACING_V2: "false"
+      LANGSMITH_TRACING: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.13"
+      - name: Build the package using pinned tooling
+        run: |
+          python -m pip install setuptools==80.9.0 wheel==0.45.1
+          python packages/sillage-python/build_wheel.py
+      - name: Install tested instrumentation and application SDK fixtures
+        run: python -m pip install 'packages/sillage-python/dist/sillage_observe-0.2.0-py3-none-any.whl[openinference]' 'openai==${{ matrix.openai }}' litellm==1.80.0 langchain-core==1.2.5 httpx==0.28.1 pydantic==2.12.4
+      - run: python -m pip check
+      - name: Context, privacy, ownership and provider compatibility
+        run: python -I -m unittest discover -s packages/sillage-python/tests -v
+      - name: Verify installed console entrypoint outside the checkout
+        working-directory: ${{ runner.temp }}
+        run: sillage-run --help
+
   mongo-ledger:
     name: Real Mongo ledger recovery
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       PYTHON_DOTENV_DISABLED: "1"
     steps:
@@ -88,6 +122,7 @@ jobs:
             if docker exec guardian-mongo mongosh --quiet --eval 'if (!db.hello().isWritablePrimary) quit(1)'; then break; fi
             sleep 1
           done
+          docker exec guardian-mongo mongosh --quiet --eval 'if (!db.hello().isWritablePrimary) quit(1)'
       - name: Transaction, restart, conflict and lease fault suite
         run: |
           mkdir -p tools/reports
@@ -170,6 +205,35 @@ jobs:
           path: |
             tools/reports/mongo-providers.json
             tools/reports/python-async-providers.json
+          retention-days: 14
+      - name: Build the versioned integration wheel with isolated tooling
+        run: |
+          python -m venv .cache/instrumentation-build
+          .cache/instrumentation-build/bin/python -m pip install setuptools==80.9.0 wheel==0.45.1
+          .cache/instrumentation-build/bin/python packages/sillage-python/build_wheel.py
+      - name: Install independent pinned OpenTelemetry and SDK fixtures
+        run: |
+          python -m venv .cache/instrumentation-python
+          .cache/instrumentation-python/bin/python -m pip install 'packages/sillage-python/dist/sillage_observe-0.2.0-py3-none-any.whl[openinference]' openai==1.99.9 litellm==1.80.0 langchain-core==1.2.5 httpx==0.28.1 pydantic==2.12.4
+          .cache/instrumentation-python/bin/python -m pip check
+          python -m venv .cache/instrumentation-openai2
+          .cache/instrumentation-openai2/bin/python -m pip install openai==2.54.0 httpx==0.28.1 pydantic==2.12.4
+          .cache/instrumentation-openai2/bin/python -m pip check
+      - name: Installed legacy launcher through the real collector and worker
+        run: python tools/test_instrumentation.py --wheel packages/sillage-python/dist/sillage_observe-0.2.0-py3-none-any.whl --sdk-python .cache/instrumentation-python/bin/python --mongo-url 'mongodb://127.0.0.1:27017/?replicaSet=guardian-r102&directConnection=true' --report tools/reports/installed-instrumentation.json
+      - name: Installed OpenTelemetry and OpenInference workflow acceptance
+        run: python tools/test_otel.py --wheel packages/sillage-python/dist/sillage_observe-0.2.0-py3-none-any.whl --sdk-python .cache/instrumentation-python/bin/python --mongo-url 'mongodb://127.0.0.1:27017/?replicaSet=guardian-r102&directConnection=true' --report tools/reports/installed-otel.json
+      - name: Installed OpenAI 2.x telemetry through the real collector and worker
+        run: python tools/test_otel.py --wheel packages/sillage-python/dist/sillage_observe-0.2.0-py3-none-any.whl --sdk-python .cache/instrumentation-openai2/bin/python --dependency-python .cache/instrumentation-python/bin/python --phases programmatic openai --mongo-url 'mongodb://127.0.0.1:27017/?replicaSet=guardian-r102&directConnection=true' --report tools/reports/installed-otel-openai2.json
+      - name: Save installed package acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: installed-python-telemetry
+          path: |
+            tools/reports/installed-instrumentation.json
+            tools/reports/installed-otel.json
+            tools/reports/installed-otel-openai2.json
           retention-days: 14
       - name: Stop owned test database
         if: always()
@@ -289,6 +353,10 @@ jobs:
         run: |
           npm install --prefix .cache/deployment-browser --no-save --package-lock=false --ignore-scripts --no-audit --no-fund playwright@1.63.0
           node .cache/deployment-browser/node_modules/playwright/cli.js install --with-deps chromium
+      - name: Build the authenticated integration download
+        run: |
+          python -m pip install setuptools==80.9.0 wheel==0.45.1
+          python packages/sillage-python/build_wheel.py
       - name: Start owned replica and standalone negative fixture
         run: |
           docker run -d --name guardian-deployment-mongo -p 127.0.0.1:27019:27019 mongo:8.0.26 --port 27019 --replSet guardian-r102 --bind_ip_all

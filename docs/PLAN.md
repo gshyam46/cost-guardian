@@ -1,4 +1,29 @@
-# Cost Guardian: implementation plan
+# Sillage: implementation plan
+
+## Standards-based capture continuation, 2026-09-13
+
+[OPENTELEMETRY.md](OPENTELEMETRY.md) and ADR-51 defined the implementation before code: maintained OpenInference hooks → bounded numeric OTel processor → existing direct collector/worker → real grouped calls and parent references. This path is now implemented in 0.2.0 and passed independent installed-wheel tests, including existing-provider preservation, OpenAI 1.x/2.x, original Founder agent metadata, LangChain callbacks and native compatibility. The final delivery includes Sillage's landing page, frontend and documentation on `mvp2.0`; [VALIDATION.md](VALIDATION.md) records final build/browser evidence. Existing direct/native and Langfuse paths remain supported.
+
+The next product milestone is an assisted onboarding of an independent application: choose its actual capture layer, confirm a real received and processed call, inspect known/unknown measurements and test a useful alert through resolution. Prioritize gaps observed there. Upstream missing stream/cancellation spans, generic OTLP admission, full workflow/RAG storage, cross-process propagation and self-service provisioning remain explicit release gates; the current numeric bridge does not close them.
+
+## Simpler application integration, 2026-09-13
+
+The next bounded R2-02 slice follows [INSTRUMENTATION.md](INSTRUMENTATION.md) and ADR-50, recorded before code:
+
+1. Package the existing numeric exporter and add version-checked Python startup hooks plus `sillage-run`; retain manual Python/Node compatibility.
+2. Serve one authenticated wheel and make install/run the default Connections path. Keep application keys distinct from sign-in and provider keys; show the actual capture source and require a real processed call for verification.
+3. Install the wheel outside this checkout and exercise actual SDKs, original Founder Path fallback code and the real collector/worker using explicitly synthetic provider responses. Test identity, error/stream behavior, deduplication and absence of raw content.
+4. Run the original Founder Path UI/API and refresh Sillage's preview after tests. Document missing real auth/provider/source credentials separately from local runtime and fixture evidence.
+
+Broader SDK versions, Node startup instrumentation, framework/OTLP bridges, subprocess coverage and full RAG context follow measured customer needs. Completed checks and remaining gaps belong in [PROGRESS.md](PROGRESS.md) and [VALIDATION.md](VALIDATION.md).
+
+This bounded slice is implemented and locally verified: the installed package passed actual SDK/collector checks, the default onboarding passed browser/native acceptance, Sillage was refreshed, and original Founder Path now starts through the package. Next prioritize one real customer workflow and visible exporter failure diagnostics, then broaden the adapter matrix from observed demand. Independent customer activation and deployed operations remain open.
+
+## Query feedback delivery, 2026-09-13
+
+The founder's [query.md](query.md) is addressed through the pre-code [experience contract](EXPERIENCE.md), alongside the selected [Sillage identity](BRAND.md). The public landing/demo, redesigned access/navigation, guided Connections, downloadable integration helpers and independent recent-call Overview are implemented. Current validation is tracked in [VALIDATION.md](VALIDATION.md); original R0-R6 release gates remain in force.
+
+The experience slice passed the full frontend/backend suites, 67 browser scenarios and the actual eight-phase native onboarding/deployment check; the local preview is refreshed with that build. The next product gaps are self-service membership and project provisioning, full workflow/RAG spans and content/privacy controls, independently verified activation by a new customer, and deployed operational acceptance. These require explicit persistent contracts and verification; a demo or visible signup form cannot close them.
 
 Updated 2026-09-12. R0-01, default Observations v2 reads, bounded run views, the R1-02 ledger, R1-03 incident summary/calendar repairs, the R2-03 access/setup prerequisite and the R2-01 isolated OIDC/session/role foundation are implemented locally. R1/R2 remain in progress: real source/exporter compatibility, cutover/recovery, operating limits, account administration, managed provisioning and real application activation are still open. Scoped ingestion credentials and native terminal-event capture are now implemented locally under [CAPTURE.md](CAPTURE.md). [INGESTION.md](INGESTION.md), [SUMMARIES.md](SUMMARIES.md) and [ACCESS.md](ACCESS.md) record the contracts agreed before code. Canonical phase IDs are R0-R6; earlier numeric phases are historical.
 
@@ -35,6 +60,8 @@ R1-02 now uses a fenced Mongo transaction boundary for durable pages, ledger/wor
 Remaining R1-02 work is the complete real transaction/failure evidence, automated legacy cutover with backup/rollback, retention and load validation, and recovery for unsupported historical gaps. Local single-node database results are recorded separately from mock/wire tests in [VALIDATION.md](VALIDATION.md). Real delayed availability and exporter compatibility remain R1-01 work under [SOURCE_MIGRATION.md](SOURCE_MIGRATION.md).
 
 ## Work packages
+
+Current founder input: [query.md](query.md), 2026-09-13. [EXPERIENCE.md](EXPERIENCE.md) records the product-experience contract before code: visible landing/demo/sign-in and application redesign, guided connection and credential management, clear data provenance, independent recent-call versus processed-accounting views, and trustworthy trace duration. The existing isolated identity/capture model remains authoritative; public demo data cannot enter customer telemetry. Self-service account provisioning and raw/RAG trace capture remain explicit gaps rather than simulated features.
 
 Deployment/onboarding implementation started on 2026-09-12 under [DEPLOYMENT.md](DEPLOYMENT.md), recorded before code. The direct/OIDC package now includes a shared API/static build, independent workers, explicit transactional bootstrap, file-based secrets and separate readiness. [Operator commands](../deploy/guardian/README.md) cover configuration, startup, first traffic and shutdown. Verify the actual entrypoint, login, key/test/real capture, processing, incident resolution and logout through a real local browser/issuer/database; record results in [VALIDATION.md](VALIDATION.md). Native-process, container-build and deployed-TLS evidence remain distinct. This is early R4-02 packaging work that enables the R2 customer journey, not completion of the beta phase.
 

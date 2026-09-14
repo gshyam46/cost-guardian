@@ -21,7 +21,7 @@ const exporter = new BackgroundExporter({
 const model = process.env.OPENAI_MODEL; // Your application's model setting.
 
 // At your existing call site: reuse client and requestArgs.
-// requestArgs stays in your app; Guardian does not capture its content.
+// requestArgs stays in your app; Sillage does not capture its content.
 // Reuse the same AbortSignal as your existing provider request, if any.
 const requestOptions = {}; // Reuse your existing request options here, including signal if used.
 const signal = requestOptions.signal;
@@ -54,7 +54,7 @@ exporter = BackgroundExporter(
 model = os.environ["OPENAI_MODEL"]  # Your application's model setting.
 
 # At your existing call site: reuse client and request_args.
-# request_args stays in your app; Guardian does not capture its content.
+# request_args stays in your app; Sillage does not capture its content.
 observed_args = {**request_args, "model": model, "stream": ${streaming ? 'True' : 'False'}${chat ? ', "n": 1' : ''}}
 ${chat && streaming ? `observed_args["stream_options"] = {
     **(request_args.get("stream_options") or {}), "include_usage": True

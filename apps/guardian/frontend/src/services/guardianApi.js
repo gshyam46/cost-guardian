@@ -12,7 +12,7 @@ let csrfToken = '';
 export const configureAuth = (body) => {
   if (!validAuthConfig(body)) throw new Error('Invalid authentication configuration.');
   if (body.auth_mode === 'oidc' && !validSessionOrigin(GUARDIAN_URL, window.location.origin)) {
-    throw new Error('Guardian session access requires a same-origin deployment.');
+    throw new Error('Sillage session access requires a same-origin deployment.');
   }
   authMode = body.auth_mode;
   sessionRevision += 1;
@@ -27,6 +27,12 @@ export const clearSessionAccess = () => { sessionRevision += 1; csrfToken = ''; 
 export const getLoginUrl = () => {
   if (authMode !== 'oidc') throw new Error('Session login is unavailable.');
   return new URL('/api/guardian/auth/login', new URL(GUARDIAN_URL, window.location.origin)).href;
+};
+// Setup must point at the same configured API used by the request client. Local
+// development can use different loopback ports; production remains same origin.
+export const getGuardianApiOrigin = () => {
+  if (authMode !== 'oidc' || !validSessionOrigin(GUARDIAN_URL, window.location.origin)) return null;
+  return new URL(GUARDIAN_URL || '/', window.location.origin).origin;
 };
 export const announceLogout = () => {
   // This timestamp is a notification only; the server remains session authority.
@@ -70,14 +76,14 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   if (config.guardianPublic) return config;
-  if (!authMode) throw new Error('Guardian authentication configuration is unavailable.');
+  if (!authMode) throw new Error('Sillage authentication configuration is unavailable.');
   config.guardianMode = authMode;
   if (authMode === 'oidc') {
     delete config.headers['X-Guardian-Key'];
     config.withCredentials = true;
     config.guardianSessionRevision = sessionRevision;
     if (!['get', 'head', 'options'].includes(config.method)) {
-      if (!csrfToken) throw new Error('Guardian session verification is required.');
+      if (!csrfToken) throw new Error('Sillage session verification is required.');
       config.headers['X-Guardian-CSRF'] = csrfToken;
     }
     return config;

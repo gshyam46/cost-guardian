@@ -83,7 +83,7 @@ const GuardianIncidents = () => {
             <ShieldCheck className="h-8 w-8 text-slate-300 mb-3" />
             <p className="text-slate-700 font-medium">{filter ? `No ${filter} incidents` : 'No incidents'}</p>
             <p className="text-sm text-slate-500 mt-1">
-              Guardian raises an incident when a detector finds a cost, reliability, or PII
+              Sillage raises an incident when a detector finds a cost, reliability, or PII
               anomaly in your captured observations.
             </p>
           </CardContent>

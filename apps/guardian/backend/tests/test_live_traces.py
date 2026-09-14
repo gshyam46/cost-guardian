@@ -81,6 +81,23 @@ def test_full_250_row_window_is_aggregated_before_feed_limit():
     assert body["runs"][0]["call_count"] == 250
 
 
+def test_langfuse_parent_references_survive_live_and_run_views_without_inventing_calls():
+    live, sdk = reader([
+        observation(0, parent_observation_id="framework-parent"),
+        observation(1, parent_observation_id="observation-0"),
+        observation(2),
+    ])
+    expected = {"observation-0": "framework-parent", "observation-1": "observation-0", "observation-2": None}
+    snapshot = live.snapshot()
+    assert {call["id"]: call["parent_observation_id"] for call in snapshot["calls"]} == expected
+    assert snapshot["stats"]["call_count"] == 3
+    run = live.run_detail("trace-1")
+    assert {call["id"]: call["parent_observation_id"] for call in run["calls"]} == expected
+    assert run["call_count"] == 3
+    assert run["workflow_status"] == "unknown" and run["latency_ms"] is None
+    assert sdk.metadata_requests == []
+
+
 def test_1000_row_budget_is_explicit_partial_coverage_not_a_complete_total():
     live, sdk = reader([observation(i) for i in range(1200)])
     body = live.snapshot()

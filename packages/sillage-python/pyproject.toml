@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools==80.9.0", "wheel==0.45.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sillage-observe"
+version = "0.2.0"
+description = "Numeric-only observation of supported Python AI SDK calls"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+otel = ["opentelemetry-sdk==1.37.0"]
+openinference = [
+    "opentelemetry-sdk==1.37.0",
+    "opentelemetry-instrumentation==0.58b0",
+    "openinference-instrumentation==0.1.60",
+    "openinference-semantic-conventions==0.1.37",
+    "openinference-instrumentation-openai==0.1.58",
+    "openinference-instrumentation-litellm==0.1.34",
+    "openinference-instrumentation-langchain==0.1.74",
+]
+
+[project.scripts]
+sillage-run = "sillage_observe.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

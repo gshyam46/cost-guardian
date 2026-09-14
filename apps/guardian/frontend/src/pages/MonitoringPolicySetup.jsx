@@ -78,7 +78,7 @@ export default function MonitoringPolicySetup() {
           error: status === 409 ? 'Another save changed the rules. Reload the saved rules before saving your edits.'
             : status === 403 ? 'Only the project owner can save monitoring rules. Reload to check your access.'
               : status === 400 || status === 422 ? 'These rules were rejected. Check the limits and try again.'
-                : 'The save was not confirmed. It may have reached Guardian. Reload the saved rules before trying again.' }));
+                : 'The save was not confirmed. It may have reached Sillage. Reload the saved rules before trying again.' }));
       }
     } finally { if (write.current === controller) write.current = null; }
   };

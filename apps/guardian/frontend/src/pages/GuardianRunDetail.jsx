@@ -20,16 +20,22 @@ const Field = ({ label, value, tone }) => (
 );
 
 /** Inspect captured measurements and optional source-provided output previews. */
-const CallRow = ({ call, names, index }) => {
+const CallRow = ({ call, names, index, capturedIds }) => {
   const [open, setOpen] = useState(false);
   const failed = call.status === 'error';
+  const outcomeUnknown = !failed && call.status !== 'success';
   const Chevron = open ? ChevronDown : ChevronRight;
+  const parentId = typeof call.parent_observation_id === 'string'
+    && /^[A-Za-z0-9_.:-]{1,128}$/.test(call.parent_observation_id)
+    && call.parent_observation_id.trim() === call.parent_observation_id
+    && call.parent_observation_id !== call.id ? call.parent_observation_id : null;
 
   return (
     <div className="border-b last:border-b-0">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full px-5 py-3 flex items-center gap-3 hover:bg-slate-50 text-left transition-colors"
+        aria-expanded={open}
+        className="cg-call-row w-full px-5 py-3 flex items-center gap-3 hover:bg-slate-50 text-left transition-colors"
       >
         <Chevron className="h-4 w-4 text-slate-400 shrink-0" />
         <span className="text-xs text-slate-400 tabular-nums w-5">{index + 1}</span>
@@ -37,26 +43,24 @@ const CallRow = ({ call, names, index }) => {
           className="h-2.5 w-2.5 rounded-sm shrink-0"
           style={{ backgroundColor: failed ? STATUS.critical : colorFor(call.agent_name, names) }}
         />
-        <span className="font-medium text-sm text-slate-900 w-44 truncate">{call.agent_name}</span>
-        <span className="text-xs text-slate-500 flex-1 truncate">{call.model}</span>
-        {failed ? (
-          <Badge className="bg-red-100 text-red-700 hover:bg-red-100">failed</Badge>
-        ) : (
+        <span className="cg-call-name font-medium text-sm text-slate-900 w-44 truncate">{call.agent_name}</span>
+        <span className="cg-call-model text-xs text-slate-500 flex-1 truncate">{call.model}</span>
+        {failed && <Badge className="bg-red-100 text-red-700 hover:bg-red-100">failed</Badge>}
+        {outcomeUnknown && <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100 shrink-0">Outcome unknown</Badge>}
           <>
-            <span className="text-xs tabular-nums text-slate-500 w-20 text-right">
+            <span className="cg-call-metric text-xs tabular-nums text-slate-500 w-20 text-right">
               {count(call.input_tokens)} in
             </span>
-            <span className="text-xs tabular-nums text-slate-500 w-20 text-right">
+            <span className="cg-call-metric text-xs tabular-nums text-slate-500 w-20 text-right">
               {count(call.output_tokens)} out
             </span>
-            <span className="text-xs tabular-nums text-slate-600 w-20 text-right">
+            <span className="cg-call-metric text-xs tabular-nums text-slate-600 w-20 text-right">
               {ms(call.latency_ms)}
             </span>
-            <span className="text-xs tabular-nums text-slate-600 w-20 text-right">
+            <span className="cg-call-metric text-xs tabular-nums text-slate-600 w-20 text-right">
               {money(call.cost_usd)}
             </span>
           </>
-        )}
       </button>
 
       {open && (
@@ -76,7 +80,7 @@ const CallRow = ({ call, names, index }) => {
             <div>
               <div className="text-slate-500">Latency</div>
               <div className="tabular-nums text-slate-900">
-                {failed ? '--' : ms(call.latency_ms)}
+                {ms(call.latency_ms)}
               </div>
             </div>
             <div>
@@ -96,6 +100,14 @@ const CallRow = ({ call, names, index }) => {
               <div className="tabular-nums text-slate-900">{money(call.cost_usd)}</div>
             </div>
           </div>
+
+          <p className="text-xs text-slate-500 mb-3 break-all">Observation ID: {call.id || 'Unknown'}</p>
+          {parentId && <div className="text-xs text-slate-500 mb-3">
+            <p className="break-all">Parent observation ID: {parentId}</p>
+            <p className="mt-1">{capturedIds.has(parentId)
+              ? 'Parent is present among captured calls.'
+              : 'Parent not present among captured calls. It may be a framework span or outside this query.'}</p>
+          </div>}
 
           {call.output_preview ? (
             <div>
@@ -150,7 +162,7 @@ const GuardianRunDetail = () => {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-slate-600">
-              This trace is unavailable. Guardian could not read its telemetry.
+              This trace is unavailable. Sillage could not read its telemetry.
             </p>
           </CardContent>
         </Card>
@@ -159,6 +171,7 @@ const GuardianRunDetail = () => {
   }
 
   const names = [...new Set(run.calls.map((c) => c.agent_name))];
+  const capturedIds = new Set(run.calls.map((call) => call.id));
   const empty = run.calls.length === 0;
   const notObserved = run.observation_state === 'not_observed';
 
@@ -221,7 +234,8 @@ const GuardianRunDetail = () => {
 
       {!empty && <><Card className="mb-5">
         <CardContent className="pt-5 grid grid-cols-2 sm:grid-cols-4 gap-6">
-          <Field label="Workflow duration" value="Unknown" />
+          <Field label="Observed tokens" value={run.total_tokens !== null && run.total_tokens !== undefined ? count(run.total_tokens)
+            : run.tokens_known_count > 0 ? `${count(run.known_total_tokens)} known` : 'Unknown'} />
           <Field label="Observed calls" value={run.call_count} />
           <Field
             label="Observed errors"
@@ -255,7 +269,7 @@ const GuardianRunDetail = () => {
         </CardHeader>
         <CardContent className="p-0">
           {run.calls.map((call, i) => (
-            <CallRow key={call.id || i} call={call} names={names} index={i} />
+            <CallRow key={call.id || i} call={call} names={names} index={i} capturedIds={capturedIds} />
           ))}
         </CardContent>
       </Card></>}

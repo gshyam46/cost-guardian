@@ -1,13 +1,13 @@
 import { useCallback, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Activity, AlertTriangle, DollarSign, Timer, ChevronRight } from 'lucide-react';
+import { Activity, AlertTriangle, DollarSign, Timer, ChevronRight, Layers, Search } from 'lucide-react';
 import GuardianLayout from './GuardianLayout';
 import { BarList, LatencyScatter, STATUS, colorFor } from '@/components/Charts';
 import guardianApi from '@/services/guardianApi';
 import useLiveData from '@/hooks/useLiveData';
-import { money, duration, count, observedCost } from '@/lib/liveFormat';
+import { isKnown, money, duration, count, observedCost } from '@/lib/liveFormat';
 
 const WINDOWS = [
   { hours: 1, label: '1h' }, { hours: 6, label: '6h' },
@@ -45,6 +45,7 @@ const Notice = ({ children }) => (
 const GuardianLive = () => {
   const navigate = useNavigate();
   const [hours, setHours] = useState(24);
+  const [search, setSearch] = useState('');
   const fetchAll = useCallback(async ({ signal } = {}) => (await guardianApi.getLive(hours, 8, 60, { signal })).data, [hours]);
   const { data, loading, refreshing, error, lastUpdated } = useLiveData(fetchAll, {
     intervalMs: 12000, refetchKey: hours,
@@ -60,6 +61,10 @@ const GuardianLive = () => {
   const agentNames = (stats?.by_agent ?? []).map((a) => a.name);
   const knownStatuses = stats ? stats.call_count - (stats.unknown_status_count || 0) : 0;
   const errorRate = knownStatuses ? `${((stats.error_count / knownStatuses) * 100).toFixed(1)}%` : 'Unknown';
+  const filteredCalls = calls.filter((call) => [call.agent_name, call.model, call.trace_id, call.status]
+    .some((value) => String(value || '').toLowerCase().includes(search.trim().toLowerCase())));
+  const tokens = isKnown(stats?.total_tokens) ? count(stats.total_tokens)
+    : stats?.tokens_known_count > 0 ? `${count(stats.known_total_tokens)} known` : 'Unknown';
 
   if (loading) return <GuardianLayout><p>{data ? 'Loading the selected window. Previous-window values are hidden.'
     : 'Loading live telemetry...'}</p></GuardianLayout>;
@@ -67,7 +72,8 @@ const GuardianLive = () => {
     <GuardianLayout refreshing={refreshing} lastUpdated={lastUpdated}>
       <div className="flex items-center justify-between mb-5 gap-3">
         <div><h2 className="text-xl font-semibold text-slate-900">Live activity</h2>
-          <p className="text-sm text-slate-500">{data?.source_kind === 'guardian_direct' ? 'Completed LLM calls captured directly by Guardian' : 'Observed LLM generations from Langfuse'}
+          <p className="text-sm text-slate-500">{!data ? 'Captured LLM usage, timing and errors'
+            : data.source_kind === 'guardian_direct' ? 'Completed LLM calls captured directly by Sillage' : 'Observed LLM generations from Langfuse'}
             {data?.fetched_at && <> — source data from {ago(data.fetched_at)}</>}
           </p>
         </div>
@@ -77,15 +83,21 @@ const GuardianLive = () => {
         ))}</div>
       </div>
       {data?.available === false ? (
-        <Notice><strong>Guardian cannot see your telemetry.</strong> {data.reason}</Notice>
+        <Notice><strong>Sillage cannot see your telemetry.</strong> {data.reason} <Link className="underline" to="/setup">Check connection</Link>.</Notice>
       ) : changingWindow ? (
         <Notice>Loading the selected window. Previous-window values are hidden.</Notice>
       ) : failed ? (
-        <Notice><strong>Telemetry is unavailable.</strong> {data?.reason || 'Guardian could not read telemetry. Refresh to try again.'}
+        <Notice><strong>Telemetry is unavailable.</strong> {data?.reason || 'Sillage could not read telemetry. Refresh to try again.'}
           {' '}No traffic or spend total can be established from this read.
         </Notice>
       ) : (
         <>
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 mb-5">
+            <p>{data.source_kind === 'guardian_direct'
+              ? 'Application → Sillage collector → worker → captured observations. Test receipts are excluded.'
+              : 'Application → Langfuse project → Sillage source query. Hourly history and incident checks run separately.'}</p>
+            <Link to="/setup" className="font-medium text-teal-800 underline">Manage connection</Link>
+          </div>
           {stale && <Notice><strong>Showing stale telemetry.</strong> The latest refresh failed.
             These observations were fetched {ago(data.fetched_at)}.</Notice>}
           {incomplete && <Notice><strong>Partial observation coverage.</strong> These are observed results, not full-window totals.
@@ -104,12 +116,15 @@ const GuardianLive = () => {
               <Activity className="h-6 w-6 text-slate-300 mx-auto mb-3" />
               <p>No LLM calls were returned for this source window.</p>
               <p className="text-sm text-slate-500">This describes the completed query; it does not establish that instrumentation is working.</p>
+              <Link className="inline-flex text-sm text-teal-800 underline mt-4" to="/setup">Connect your app and verify a real call</Link>
             </CardContent></Card>
           ) : (
             <>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+              <div className="grid grid-cols-2 xl:grid-cols-5 gap-3 mb-5">
                 <Stat icon={Activity} label="Observed calls" value={count(stats.call_count)}
                   sub={stats.last_call_at ? `last ${ago(stats.last_call_at)}` : 'No accepted observations'} />
+                <Stat icon={Layers} label="Observed tokens" value={tokens}
+                  sub={`${count(stats.tokens_known_count)} calls with usage; ${count(stats.tokens_unknown_count)} missing`} />
                 <Stat icon={AlertTriangle} label="Observed error rate" value={errorRate}
                   sub={`${count(stats.error_count)} errors / ${count(knownStatuses)} known outcomes; ${count(stats.unknown_status_count || 0)} unknown`} />
                 <Stat icon={DollarSign} label="Known spend"
@@ -119,6 +134,22 @@ const GuardianLive = () => {
                 <Stat icon={Timer} label="p95 observed latency" value={duration(stats.p95_latency_ms)}
                   sub={`${count(stats.latency_known_count)} measured; avg ${duration(stats.avg_latency_ms)}`} />
               </div>
+              {(stats.by_model || []).length > 0 && <Card className="mb-5"><CardHeader className="pb-3">
+                <CardTitle className="text-base">Model usage</CardTitle>
+                <CardDescription>Compare accepted observations by model across the selected window.</CardDescription>
+              </CardHeader><CardContent className="p-0 overflow-x-auto">
+                <table className="w-full text-sm"><thead className="text-xs text-slate-500 border-t bg-slate-50/50">
+                  <tr><th className="text-left px-6 py-3 font-medium">Model</th><th className="text-right p-3 font-medium">Calls</th>
+                    <th className="text-right p-3 font-medium">Tokens</th><th className="text-right p-3 font-medium">Errors</th>
+                    <th className="text-right p-3 font-medium">Avg latency</th><th className="text-right px-6 py-3 font-medium">Known cost</th></tr>
+                </thead><tbody>{stats.by_model.map((model) => <tr key={model.name} className="border-t">
+                  <td className="px-6 py-3 font-medium">{model.name}</td><td className="text-right p-3 tabular-nums">{count(model.calls)}</td>
+                  <td className="text-right p-3 tabular-nums">{isKnown(model.tokens) ? count(model.tokens)
+                    : model.tokens_known_count > 0 ? `${count(model.known_total_tokens)} known` : 'Unknown'}</td>
+                  <td className="text-right p-3 tabular-nums">{count(model.errors)}</td><td className="text-right p-3 tabular-nums">{duration(model.avg_latency_ms)}</td>
+                  <td className="text-right px-6 py-3 tabular-nums">{observedCost(model.cost_usd, model.known_cost_usd, model.cost_known_count)}</td>
+                </tr>)}</tbody></table>
+              </CardContent></Card>}
               <Card className="mb-5"><CardHeader className="pb-2">
                 <CardTitle className="text-base">Latency per call</CardTitle>
                 <CardDescription>Displayed feed only: {calls.length} of {stats.call_count} accepted observations.
@@ -153,16 +184,24 @@ const GuardianLive = () => {
               </div></CardContent></Card>
               <Card><CardHeader className="pb-3"><CardTitle className="text-base">Call feed</CardTitle>
                 <CardDescription>Newest first. Showing {calls.length} of {stats.call_count} accepted observations; summaries use all accepted rows.</CardDescription>
+                <label className="flex items-center gap-2 border rounded-lg px-3 py-2 mt-3 text-sm">
+                  <Search className="h-4 w-4 text-slate-400" />
+                  <input aria-label="Search displayed calls" value={search} onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search displayed calls by model, agent, trace or status" className="w-full bg-transparent outline-none" />
+                </label>
+                {search.trim() && <p className="text-xs text-slate-500">{filteredCalls.length} matching displayed calls. Window summaries are unchanged.</p>}
               </CardHeader><CardContent className="p-0"><div className="divide-y max-h-[420px] overflow-y-auto">
-                {calls.map((call) => <div key={call.id} className="px-6 py-2.5 flex items-center gap-3 text-sm">
+                {filteredCalls.map((call) => <div key={call.id} className="px-6 py-2.5 flex items-center gap-3 text-sm">
                   <StatusDot status={call.status} />
                   <span className="h-2 w-2 rounded-sm shrink-0" style={{ backgroundColor: colorFor(call.agent_name, agentNames) }} />
-                  <span className="font-medium w-40 truncate">{call.agent_name}</span>
+                  {call.trace_id ? <Link to={`/runs/${encodeURIComponent(call.trace_id)}`} className="font-medium w-40 truncate text-teal-800 hover:underline">{call.agent_name}</Link>
+                    : <span className="font-medium w-40 truncate">{call.agent_name}</span>}
                   <span className="text-xs text-slate-400 flex-1 truncate">{call.model}</span>
                   <span className="text-xs w-20 text-right">{duration(call.latency_ms)}</span>
                   <span className="text-xs w-24 text-right">{count(call.total_tokens)} tokens</span>
                   <span className="text-xs w-24 text-right">{money(call.cost_usd)}</span>
                 </div>)}
+                {!filteredCalls.length && <p className="px-6 py-5 text-sm text-slate-500">No displayed calls match this search.</p>}
               </div></CardContent></Card>
             </>
           )}

@@ -92,7 +92,7 @@ const GuardianIncidentDetail = () => {
       <h2 className="text-lg font-semibold mb-2">{result.error === 404 ? 'Incident not found' : result.error === 403 ? 'Access denied' : 'Could not load incident'}</h2>
       <p role="alert" className="text-sm text-slate-600">
         {result.error === 404 ? 'The requested incident was not found.'
-          : result.error === 403 ? 'Access to this incident was denied. Check with your Guardian operator.'
+          : result.error === 403 ? 'Access to this incident was denied. Check with your Sillage operator.'
           : result.error === 401 ? 'Access was rejected. Connect again to continue.'
           : 'Incident evidence is temporarily unavailable. Retry when the service is available.'}
       </p>

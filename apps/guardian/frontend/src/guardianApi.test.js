@@ -1,7 +1,7 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
-import guardianApi, { announceLogout, clearApiKey, clearSessionAccess, configureAuth, getApiKey, sendCaptureTest, setApiKey, setSessionAccess } from '@/services/guardianApi';
+import guardianApi, { announceLogout, clearApiKey, clearSessionAccess, configureAuth, getApiKey, getGuardianApiOrigin, sendCaptureTest, setApiKey, setSessionAccess } from '@/services/guardianApi';
 import { validSessionOrigin } from '@/services/guardianIdentity';
 
 // Exercise Axios's actual interceptor chain without dialing a network service.
@@ -287,10 +287,47 @@ test('an explicit same-origin build path produces /api requests and a fixed loca
     await isolated.default.getAccess();
     expect(mockAdapter.mock.calls[0][0].baseURL).toBe('/api');
     expect(isolated.getLoginUrl()).toBe(window.location.origin + '/api/guardian/auth/login');
+    expect(isolated.getGuardianApiOrigin()).toBe(window.location.origin);
   } finally {
     if (previous === undefined) delete process.env.REACT_APP_GUARDIAN_URL;
     else process.env.REACT_APP_GUARDIAN_URL = previous;
   }
+});
+
+test('the application capture address follows the configured local API rather than the frontend port', async () => {
+  const previous = process.env.REACT_APP_GUARDIAN_URL;
+  process.env.REACT_APP_GUARDIAN_URL = 'http://localhost:8001/';
+  try {
+    let isolated;
+    jest.isolateModules(() => { isolated = require('@/services/guardianApi'); });
+    isolated.configureAuth(oidcConfig);
+    await isolated.default.getAccess();
+    expect(mockAdapter.mock.calls[0][0].baseURL).toBe('http://localhost:8001/api');
+    expect(isolated.getGuardianApiOrigin()).toBe('http://localhost:8001');
+    expect(isolated.getGuardianApiOrigin()).not.toBe(window.location.origin);
+  } finally {
+    if (previous === undefined) delete process.env.REACT_APP_GUARDIAN_URL;
+    else process.env.REACT_APP_GUARDIAN_URL = previous;
+  }
+});
+
+test.each(['https://outside.invalid', 'http://user:secret@localhost:8001', 'http://localhost:8001/private',
+  'http://localhost:8001?token=private', 'javascript:alert(1)'])('an unapproved capture base %s cannot become a downloadable link', (base) => {
+  const previous = process.env.REACT_APP_GUARDIAN_URL;
+  process.env.REACT_APP_GUARDIAN_URL = base;
+  try {
+    let isolated;
+    jest.isolateModules(() => { isolated = require('@/services/guardianApi'); });
+    expect(() => isolated.configureAuth(oidcConfig)).toThrow('same-origin deployment');
+    expect(isolated.getGuardianApiOrigin()).toBeNull();
+  } finally {
+    if (previous === undefined) delete process.env.REACT_APP_GUARDIAN_URL;
+    else process.env.REACT_APP_GUARDIAN_URL = previous;
+  }
+});
+
+test('shared-key mode does not expose an organization-session download address', () => {
+  expect(getGuardianApiOrigin()).toBeNull();
 });
 
 test('key management uses the dashboard session and CSRF, never an ingestion credential', async () => {

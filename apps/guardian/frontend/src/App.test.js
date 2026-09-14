@@ -20,6 +20,7 @@ jest.mock('@/services/guardianApi', () => ({
     getOverview: jest.fn(),
     getSummary: jest.fn(),
     getMonitoring: jest.fn(),
+    getLive: jest.fn(),
     getMetrics: jest.fn(),
     getTrends: jest.fn(),
     getIncident: jest.fn(),
@@ -84,6 +85,16 @@ beforeEach(() => {
     overview: {}, trends: [], coverage: { status: 'complete', invalid_timestamp_count: 0 }, timezone: 'UTC',
   } });
   guardianApi.getMonitoring.mockResolvedValue({ data: { healthy: false, status: 'not_polled' } });
+  guardianApi.getLive.mockResolvedValue({ data: {
+    available: true, degraded: false, stale: false, fetched_at: '2026-01-01T12:00:00Z',
+    coverage: { status: 'complete', observed_count: 0, records_read: 0, invalid_count: 0, duplicate_count: 0,
+      window_start: '2025-12-31T12:00:00Z', window_end: '2026-01-01T12:00:00Z' },
+    stats: { window_hours: 24, call_count: 0, error_count: 0, unknown_status_count: 0,
+      total_cost_usd: 0, known_cost_usd: 0, cost_known_count: 0, cost_unknown_count: 0,
+      total_tokens: 0, known_total_tokens: 0, tokens_known_count: 0, tokens_unknown_count: 0,
+      avg_latency_ms: null, p95_latency_ms: null, latency_known_count: 0, latency_unknown_count: 0,
+      by_agent: [], by_model: [] }, calls: [], runs: [],
+  } });
   guardianApi.getMetrics.mockResolvedValue({ data: [] });
   guardianApi.getTrends.mockResolvedValue({ data: [] });
   guardianApi.getIncident.mockResolvedValue({ data: {
@@ -103,7 +114,7 @@ test('an incident deep link requires connection before fetching protected data',
   window.history.replaceState({}, '', '/incidents/incident-42');
   await act(async () => root.render(<App />));
 
-  expect(container.textContent).toContain('Guardian API key');
+  expect(container.textContent).toContain('Workspace access key');
   expect(guardianApi.getIncident).not.toHaveBeenCalled();
   expect(window.location.pathname).toBe('/incidents/incident-42');
 });
@@ -145,7 +156,7 @@ test('stored credentials gate protected reads until an access-only check succeed
   const access = deferred();
   guardianApi.getAccess.mockReturnValue(access.promise);
   await act(async () => root.render(<App />));
-  expect(container.textContent).toContain('Checking Guardian access');
+  expect(container.textContent).toContain('Checking Sillage access');
   expect(guardianApi.getSummary).not.toHaveBeenCalled();
   expect(guardianApi.getMonitoring).not.toHaveBeenCalled();
   await act(async () => access.resolve({ data: accessBody }));
@@ -173,7 +184,7 @@ test.each([{}, { ...accessBody, authenticated: false }, { ...accessBody, permiss
     await enterKey('candidate-secret');
     expect(setApiKey).not.toHaveBeenCalled();
     expect(guardianApi.getSummary).not.toHaveBeenCalled();
-    expect(container.textContent).toContain('Could not verify Guardian access');
+    expect(container.textContent).toContain('Could not verify Sillage access');
   },
 );
 
@@ -183,7 +194,7 @@ test('startup rejection removes the stored key and preserves the requested route
   guardianApi.getAccess.mockRejectedValue({ response: { status: 401 } });
   await act(async () => root.render(<App />));
   expect(localStorage.getItem('guardian_api_key')).toBeNull();
-  expect(container.textContent).toContain('Guardian API key');
+  expect(container.textContent).toContain('Workspace access key');
   expect(window.location.pathname).toBe('/incidents/incident-42');
   expect(guardianApi.getIncident).not.toHaveBeenCalled();
 });
@@ -205,7 +216,7 @@ test('a valid key enters even when the incident summary is unavailable', async (
   await act(async () => root.render(<App />));
   await enterKey('valid-key');
   expect(localStorage.getItem('guardian_api_key')).toBe('valid-key');
-  expect(container.textContent).toContain('Could not load Guardian data');
+  expect(container.textContent).toContain('Could not load Sillage data');
   expect(container.textContent).not.toContain('no API key configured');
 });
 
@@ -217,7 +228,7 @@ test('disconnect removes protected content without reloading or losing the route
   await act(async () => button('Disconnect').click());
   expect(clearApiKey).toHaveBeenCalled();
   expect(container.textContent).not.toContain('Unexpected retry spend');
-  expect(container.textContent).toContain('Guardian API key');
+  expect(container.textContent).toContain('Workspace access key');
   expect(window.location.pathname).toBe('/incidents/incident-42');
 });
 
@@ -230,7 +241,7 @@ test('cross-tab changes unmount protected content and revalidate before returnin
     localStorage.setItem('guardian_api_key', 'second-key');
     window.dispatchEvent(new StorageEvent('storage', { key: 'guardian_api_key', newValue: 'second-key' }));
   });
-  expect(container.textContent).toContain('Checking Guardian access');
+  expect(container.textContent).toContain('Checking Sillage access');
   expect(container.textContent).not.toContain('Open incidents');
   expect(guardianApi.getAccess).toHaveBeenLastCalledWith('second-key', { signal: expect.any(AbortSignal) });
   await act(async () => access.resolve({ data: accessBody }));
@@ -239,7 +250,7 @@ test('cross-tab changes unmount protected content and revalidate before returnin
     localStorage.removeItem('guardian_api_key');
     window.dispatchEvent(new StorageEvent('storage', { key: 'guardian_api_key', newValue: null }));
   });
-  expect(container.textContent).toContain('Guardian API key');
+  expect(container.textContent).toContain('Workspace access key');
 });
 
 test('stored access response cannot mount content after an undelivered cross-tab replacement', async () => {
@@ -283,7 +294,7 @@ test('an unknown connected route recovers to the overview', async () => {
   await act(async () => root.render(<App />));
 
   expect(window.location.pathname).toBe('/');
-  expect(container.textContent).toContain('No telemetry yet');
+  expect(container.textContent).toContain('Connect one real application call.');
   expect(guardianApi.getSummary).toHaveBeenCalledWith(14, { signal: expect.any(AbortSignal) });
 });
 
@@ -304,7 +315,7 @@ test.each([{}, { auth_mode: 'unsupported', login_path: null }, { auth_mode: 'oid
     guardianApi.getAuthConfig.mockResolvedValue({ data });
     const reads = jest.spyOn(Storage.prototype, 'getItem');
     await act(async () => root.render(<App />));
-    expect(container.textContent).toContain('Could not load Guardian sign-in configuration');
+    expect(container.textContent).toContain('Could not load Sillage sign-in configuration');
     expect(container.querySelector('input')).toBeNull();
     expect(reads).not.toHaveBeenCalled();
     expect(guardianApi.getAccess).not.toHaveBeenCalled();
@@ -316,7 +327,7 @@ test('unavailable configuration supports retry before consulting legacy storage'
   await act(async () => root.render(<App />));
   expect(container.textContent).toContain('sign-in configuration');
   await act(async () => button('Retry access').click());
-  expect(container.textContent).toContain('Guardian API key');
+  expect(container.textContent).toContain('Workspace access key');
 });
 
 test('OIDC access works with blocked key storage and shows the verified member and scope', async () => {
@@ -353,7 +364,7 @@ test.each([
   useOidc();
   guardianApi.getAccess.mockResolvedValue({ data });
   await act(async () => root.render(<App />));
-  expect(container.textContent).toContain('Could not verify Guardian access');
+  expect(container.textContent).toContain('Could not verify Sillage access');
   expect(guardianApi.getSummary).not.toHaveBeenCalled();
   expect(setSessionAccess).not.toHaveBeenCalled();
 });
@@ -410,7 +421,7 @@ test('server logout immediately removes evidence; failure stays closed and retry
   guardianApi.logout.mockReturnValueOnce(logout.promise);
   await act(async () => button('Sign out').click());
   expect(container.textContent).not.toContain('Unexpected retry spend');
-  expect(container.textContent).toContain('Signing out of Guardian');
+  expect(container.textContent).toContain('Signing out of Sillage');
   expect(announceLogout).not.toHaveBeenCalled();
   await act(async () => logout.reject({ response: { status: 503 } }));
   expect(container.textContent).toContain('session may still be active');
@@ -418,7 +429,7 @@ test('server logout immediately removes evidence; failure stays closed and retry
   await act(async () => window.dispatchEvent(new Event('focus')));
   expect(container.textContent).not.toContain('Unexpected retry spend');
   await act(async () => button('Retry sign-out').click());
-  expect(container.textContent).toContain('Signed out of Guardian');
+  expect(container.textContent).toContain('Signed out of Sillage');
   expect(announceLogout).toHaveBeenCalledTimes(1);
   expect(clearSessionAccess).toHaveBeenCalledTimes(1);
   expect(clearApiKey).not.toHaveBeenCalled();
@@ -445,7 +456,7 @@ test('explicit sign-out retry revalidates a replaced session before using its fr
   expect(setSessionAccess).toHaveBeenLastCalledWith(replacement);
   expect(guardianApi.logout).toHaveBeenCalledTimes(2);
   expect(announceLogout).toHaveBeenCalledTimes(1);
-  expect(container.textContent).toContain('Signed out of Guardian');
+  expect(container.textContent).toContain('Signed out of Sillage');
 });
 
 test.each([401, 503])('sign-out retry access %s does not blindly repeat a mutation', async (status) => {
@@ -480,10 +491,10 @@ test('cross-tab changes during sign-out stay closed and a stale logout success c
   expect(container.textContent).toContain('Browser session state changed');
   await act(async () => button('Retry sign-out').click());
   await act(async () => oldLogout.resolve({ status: 204 }));
-  expect(container.textContent).toContain('Signing out of Guardian');
+  expect(container.textContent).toContain('Signing out of Sillage');
   expect(announceLogout).not.toHaveBeenCalled();
   await act(async () => retryLogout.resolve({ status: 204 }));
-  expect(container.textContent).toContain('Signed out of Guardian');
+  expect(container.textContent).toContain('Signed out of Sillage');
   expect(announceLogout).toHaveBeenCalledTimes(1);
 });
 

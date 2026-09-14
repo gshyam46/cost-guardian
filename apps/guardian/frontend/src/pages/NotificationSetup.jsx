@@ -85,7 +85,7 @@ export function useNotificationData(incidentId = null) {
         error: acknowledged ? 'The action was accepted, but delivery history could not be refreshed. Refresh before another action.'
           : error?.response?.status === 409 ? 'Notification settings or delivery state changed. Refresh before trying again.'
             : error?.response?.status === 403 ? 'Only the project owner can change notifications. Refresh to check your access.'
-              : 'The notification action was not confirmed. It may have reached Guardian. Refresh before trying again.' }));
+              : 'The notification action was not confirmed. It may have reached Sillage. Refresh before trying again.' }));
     } finally { if (write.current === controller) write.current = null; }
   };
   return { ...state, data, error: currentScope ? state.error : '', notice: currentScope ? state.notice : '',
@@ -160,7 +160,7 @@ export default function NotificationSetup() {
       </>}
       <div className="space-y-2 text-xs"><p>A test request queues a labelled message; it does not enable notifications. Refresh status to check Slack acceptance. Enabled settings and worker health are separate facts.</p>
         <p>Enabling applies to new incidents only. Disabling cancels queued incident notifications; an attempt already admitted may still finish. Test messages can run while incident notifications are disabled.</p>
-        <p>Messages contain a fixed category and severity, opaque identifiers and a Guardian link. They exclude prompts, outputs and incident evidence.</p></div>
+        <p>Messages contain a fixed category and severity, opaque identifiers and a Sillage link. They exclude prompts, outputs and incident evidence.</p></div>
     </CardContent>
   </Card>;
 }

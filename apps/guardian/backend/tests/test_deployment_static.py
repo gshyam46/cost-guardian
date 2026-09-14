@@ -47,7 +47,7 @@ def application(build):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("path", ["/", "/setup", "/live", "/incidents", "/incidents/abc-123", "/runs/trace_123:attempt-1",
+@pytest.mark.parametrize("path", ["/", "/welcome", "/demo", "/signin", "/setup", "/live", "/incidents", "/incidents/abc-123", "/runs/trace_123:attempt-1",
     "/runs/_trace", "/runs/-trace", "/runs/:trace", "/runs/.trace", "/?guardian_login=complete"])
 async def test_known_deep_links_receive_noncacheable_shell(build, path):
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application(build)), base_url="http://test") as client:
@@ -59,7 +59,7 @@ async def test_known_deep_links_receive_noncacheable_shell(build, path):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("path", ["/api", "/api/unknown", "/unknown", "/setup/extra", "/runs", "/.env", "/server.py",
+@pytest.mark.parametrize("path", ["/api", "/api/unknown", "/unknown", "/setup/extra", "/welcome/extra", "/demo/extra", "/signin/extra", "/runs", "/.env", "/server.py",
     "/asset-manifest.json", "/src/App.js", JS + ".map", "/static/js/missing.1234abcd.js", "/static/%2e%2e/.env",
     "/static/js/%252e%252e/.env", "/runs/%2e%2e", "/runs/a%2Fb", "/runs/a%5Cb", "/runs/" + "a" * 129])
 async def test_unknown_api_assets_source_and_traversal_never_fall_back_to_html(build, path):

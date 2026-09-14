@@ -265,15 +265,21 @@ def run_suite(args, report_dir):
             await_ready(origin, api)
             check(request(origin, "/api/health")[0] == 200, "liveness_failed")
             check(request(origin, "/api/guardian/access")[0] == 401, "anonymous_data_read_accepted")
-            for path in ("/api/nonexistent", "/.env", "/server.py", "/static/missing.js", "/unknown-route"):
+            for language in ("python", "node"):
+                check(request(origin, "/api/guardian/integrations/" + language + ".zip")[0] == 401, "anonymous_helper_download_accepted")
+            check(request(origin, "/api/guardian/integrations/python.whl")[0] == 401, "anonymous_python_package_download_accepted")
+            for path in ("/api/nonexistent", "/.env", "/server.py", "/static/missing.js", "/unknown-route", "/demo/unknown", "/welcome/unknown", "/signin/unknown"):
                 status, headers, body = request(origin, path)
                 check(status == 404 and b'<div id="root">' not in body, "static_or_api_boundary_failed")
-            status, headers, body = request(origin, "/setup")
-            check(status == 200 and b'<div id="root">' in body and "no-store" in headers.get("cache-control", ""), "setup_shell_unavailable")
+            for path in ("/welcome", "/demo", "/signin", "/setup"):
+                status, headers, body = request(origin, path)
+                check(status == 200 and b'<div id="root">' in body and "no-store" in headers.get("cache-control", ""), "public_or_setup_shell_unavailable")
             step("actual_lifespan_readiness_static_and_authority")
             worker = register(launch(args.guardian_python, environment, ["run", "worker"]))
             browser_config = {"origin": origin, "issuer": issuer.origin, "playwright": str(args.playwright),
-                "module_dir": str(ROOT / "examples" / "native-capture"), "report_dir": str(report_dir), "phase": "first"}
+                "guardian_python": args.guardian_python, "module_dir": str(ROOT / "examples" / "native-capture"),
+                "python_wheel": str(ROOT / "packages/sillage-python/dist/sillage_observe-0.2.0-py3-none-any.whl"),
+                "report_dir": str(report_dir), "phase": "first"}
             browser = register(Child([args.node, str(FIXTURES / "browser.cjs"), "--run"], browser_config, cwd=ROOT))
             first = browser.result(120)
             if first.get("status") != "passed": result["browser_failure"] = first
@@ -363,6 +369,7 @@ def main(argv=None):
         check(args.guardian_python and args.node, "interpreter_missing")
         args.playwright, args.static_dir = Path(args.playwright).resolve(), Path(args.static_dir).resolve()
         check((args.playwright / "package.json").is_file() and (args.static_dir / "asset-manifest.json").is_file(), "fixture_dependencies_missing")
+        check((ROOT / "packages/sillage-python/dist/sillage_observe-0.2.0-py3-none-any.whl").is_file(), "python_wheel_fixture_missing")
         report.parent.mkdir(parents=True, exist_ok=True)
         result = run_suite(args, report.parent)
     except Exception as error:

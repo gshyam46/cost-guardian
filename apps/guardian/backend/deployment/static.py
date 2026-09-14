@@ -17,7 +17,7 @@ MAX_METADATA_BYTES = 256 * 1024
 _ASSET = re.compile(r"/static/(?:js|css|media)/[A-Za-z0-9_-][A-Za-z0-9_.-]*\.[0-9a-f]{8,64}(?:\.[A-Za-z0-9_-]+)*\.(?:js|css|svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf)\Z")
 _MAP = re.compile(r"/static/(?:js|css)/[A-Za-z0-9_-][A-Za-z0-9_.-]*\.[0-9a-f]{8,64}\.(?:js|css)\.map\Z")
 _DETAIL = re.compile(r"/(?:incidents|runs)/[A-Za-z0-9_.:-]{1,128}\Z")
-_SHELL = frozenset({"/", "/setup", "/live", "/incidents"})
+_SHELL = frozenset({"/", "/welcome", "/demo", "/signin", "/setup", "/live", "/incidents"})
 _PUBLIC = {"/favicon.ico": "image/x-icon", "/manifest.json": "application/manifest+json", "/robots.txt": "text/plain"}
 _MIME = {".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png",
          ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp",

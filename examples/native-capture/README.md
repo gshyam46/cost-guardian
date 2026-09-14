@@ -1,5 +1,7 @@
 # Native capture for Python and Node
 
+**Python default:** [install `sillage-observe` and start your existing app with `sillage-run`](../../packages/sillage-python/README.md). The downloadable wheel bundles the transport and version-checked SDK instrumentation; supported calls need no copied files or per-call wrapper. The manual Python/Node integrations below remain available for explicit instrumentation and unsupported startup environments. [Architecture and limits](../../docs/INSTRUMENTATION.md).
+
 Use these files with a configured direct-mode Guardian project and an owner-issued ingestion key. No Langfuse account is required. Local synthetic commands need no provider key; a real integration keeps using the application's own authenticated provider client. The background exporters support long-running application processes; manual senders remain available for applications that already own a telemetry queue. See [PROVIDERS.md](../../docs/PROVIDERS.md) for OpenAI usage, [EXPORTING.md](../../docs/EXPORTING.md) for exporter lifecycle and [CAPTURE.md](../../docs/CAPTURE.md) for the accepted event schema.
 
 ## Connect an existing OpenAI application

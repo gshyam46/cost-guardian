@@ -90,6 +90,8 @@ agenthub/agents/youtube/db
 
 # Build caches
 .cache/
+# Windows may create this literal path when a sanitized test environment lacks SystemDrive.
+/apps/guardian/backend/%SystemDrive%/
 
 # Mobile development
 android-sdk/ 

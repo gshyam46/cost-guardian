@@ -3,11 +3,11 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import GuardianSetup from './GuardianSetup';
 import { GuardianAccessContext } from '@/contexts/GuardianAccess';
-import guardianApi, { sendCaptureTest } from '@/services/guardianApi';
+import guardianApi, { getGuardianApiOrigin, sendCaptureTest } from '@/services/guardianApi';
 
 jest.mock('./GuardianLayout', () => ({ children }) => <main>{children}</main>);
 jest.mock('@/services/guardianApi', () => ({ __esModule: true,
-  captureRequestId: () => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', sendCaptureTest: jest.fn(),
+  captureRequestId: () => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', getGuardianApiOrigin: jest.fn(), sendCaptureTest: jest.fn(),
   default: { getCapture: jest.fn(), getMonitoring: jest.fn(), getMonitoringPolicy: jest.fn(), getNotifications: jest.fn(), listIngestionKeys: jest.fn(), createIngestionKey: jest.fn(), revokeIngestionKey: jest.fn() },
 }));
 
@@ -39,6 +39,7 @@ const create = async () => { await input('ingestion-label', 'production-backend'
 
 beforeEach(() => {
   jest.resetAllMocks(); localStorage.clear(); sessionStorage.clear();
+  getGuardianApiOrigin.mockReturnValue(window.location.origin);
   guardianApi.getCapture.mockResolvedValue({ data: capture() });
   guardianApi.getMonitoring.mockResolvedValue({ data: {} });
   guardianApi.getNotifications.mockImplementation(async () => ({ data: { schema_version: 1, revision: 0, project, can_manage: policyRole === 'owner', updated_at: null,
@@ -61,6 +62,122 @@ test('direct owner setup distinguishes no real receipt and stopped worker from s
   expect(container.textContent).not.toContain('Last source checkpoint');
   expect(button('Create ingestion key')).toBeDefined();
   expect(container.textContent).not.toMatch(/Monitoring is active|Monitoring is healthy/);
+});
+
+test('fresh onboarding explains the application key and opens only the first step', async () => {
+  await render();
+  expect(container.querySelector('h1').textContent).toBe('Connections');
+  expect(container.querySelector('[data-testid="connection-status"]').textContent).toBe('Waiting for your first app call');
+  expect(container.textContent).toContain('Your sign-in gives you access to the dashboard');
+  expect(container.textContent).toContain('Sillage does not need your OpenAI or other provider API key');
+  expect(container.querySelector('#connection-keys').open).toBe(true);
+  for (const id of ['integrate', 'test', 'verify', 'rules', 'notifications']) {
+    expect(container.querySelector(`#connection-${id}`).open).toBe(false);
+  }
+  expect(container.querySelectorAll('[aria-label="How application data reaches Sillage"] > li')).toHaveLength(3);
+  expect(sendCaptureTest).not.toHaveBeenCalled();
+  expect(guardianApi.createIngestionKey).not.toHaveBeenCalled();
+});
+
+test('launcher is the default integration and optional testing follows real-call verification', async () => {
+  await render(); await create();
+  expect(button('Python: install + run').getAttribute('aria-pressed')).toBe('true');
+  expect(container.querySelector('#provider-integration-title').closest('[hidden]')).not.toBeNull();
+  expect(container.textContent).toContain('Langfuse is not used by this workspace');
+  await act(async () => button('Continue to install').click());
+  expect(container.querySelector('#connection-integrate').open).toBe(true);
+  expect(container.querySelector('#one-time-ingestion-key').value).toBe(token);
+  expect(container.querySelector('[aria-label="Sillage server configuration"]').textContent).not.toContain(token);
+  const steps = [...container.querySelectorAll('details[id^="connection-"]')].map(node => node.id);
+  expect(steps.indexOf('connection-test')).toBeGreaterThan(steps.indexOf('connection-verify'));
+  expect(sendCaptureTest).not.toHaveBeenCalled();
+});
+
+test('a known active key guides the user to integration without treating it as traffic', async () => {
+  guardianApi.listIngestionKeys.mockResolvedValue({ data: { credentials: [credential()] } });
+  await render();
+  expect(button('Integrate your app')).toBeDefined();
+  await act(async () => button('Integrate your app').click());
+  expect(container.querySelector('#connection-integrate').open).toBe(true);
+  expect(container.querySelector('[data-testid="connection-status"]').textContent).toBe('Waiting for your first app call');
+  expect(container.querySelector('#connection-verify summary').textContent).toContain('Awaiting app call');
+  expect(container.textContent).toContain('this Sillage deployment\'s base address, without /api');
+  expect(container.textContent).toContain('This is not your OpenAI key or dashboard sign-in');
+});
+
+test('custom-provider setup exposes the metadata contract without requiring an OpenAI client', async () => {
+  await render('viewer');
+  await act(async () => button('Manual Python / Node').click());
+  await act(async () => button('Other providers / custom JSON').click());
+  expect(container.querySelector('#provider-integration-title').textContent).toBe('Connect another provider');
+  const json = [...container.querySelectorAll('details')].find((node) => node.querySelector('summary')?.textContent.startsWith('Advanced: Sillage JSON'));
+  expect(json.open).toBe(true);
+  expect(json.textContent).toContain('REPLACE_WITH_CALL_START_UTC');
+  expect(json.textContent).toContain('X-Guardian-Ingest-Key');
+  expect(container.textContent).toContain('an ingestion key alone does not capture calls automatically');
+  expect(guardianApi.createIngestionKey).not.toHaveBeenCalled();
+  expect(sendCaptureTest).not.toHaveBeenCalled();
+});
+
+test('helper download follows the selected language on the authenticated same-origin route', async () => {
+  await render(); await create();
+  await act(async () => button('Manual Python / Node').click());
+  const download = () => container.querySelector('a[download^="sillage-"]');
+  expect(download().getAttribute('href')).toBe(window.location.origin + '/api/guardian/integrations/python.zip');
+  expect(download().textContent).toContain('Download Python helpers');
+  expect(download().getAttribute('download')).toBe('sillage-python.zip');
+  await act(async () => button('Node').click());
+  expect(download().getAttribute('href')).toBe(window.location.origin + '/api/guardian/integrations/node.zip');
+  expect(download().textContent).toContain('Download Node helpers');
+  expect(download().outerHTML).not.toContain(token);
+  expect(container.querySelector('#one-time-ingestion-key').value).toBe(token);
+});
+
+test('split-origin local setup uses the configured API address for downloads and app configuration', async () => {
+  getGuardianApiOrigin.mockReturnValue('http://localhost:8001');
+  await render();
+  await act(async () => button('Manual Python / Node').click());
+  expect(container.querySelector('a[download^="sillage-"]').getAttribute('href')).toBe('http://localhost:8001/api/guardian/integrations/python.zip');
+  const url = [...container.querySelectorAll('dt')].find((node) => node.textContent === 'GUARDIAN_URL');
+  expect(url.nextElementSibling.textContent).toContain('http://localhost:8001');
+});
+
+test('unconfirmed API configuration does not create a download link or invent an application URL', async () => {
+  getGuardianApiOrigin.mockReturnValue(null);
+  await render();
+  expect(container.querySelector('a[download]')).toBeNull();
+  expect(container.textContent).toContain('The capture address is unavailable');
+  const url = [...container.querySelectorAll('dt')].find((node) => node.textContent === 'GUARDIAN_URL');
+  expect(url.nextElementSibling.textContent).toContain('Unavailable');
+});
+
+test('observed processing links to evidence without claiming complete monitoring', async () => {
+  guardianApi.getCapture.mockResolvedValue({ data: capture({ status: { ...capture().status,
+    last_received_at: '2026-09-12T10:00:00Z', received_events: 2, processed_events: 2,
+    last_processed_at: '2026-09-12T10:00:05Z', worker_status: 'current' } }) });
+  await render();
+  expect(container.querySelector('[data-testid="connection-status"]').textContent).toBe('Application events processed');
+  await act(async () => button('Check processing').click());
+  expect(container.querySelector('#connection-verify').open).toBe(true);
+  expect(container.textContent).toContain('Overview totals and incident checks can finish after inbox processing');
+  expect(container.textContent).not.toMatch(/Monitoring is active|Monitoring is healthy|All calls captured/);
+});
+
+test('unknown receipt timing is not presented as a never-connected application', async () => {
+  guardianApi.getCapture.mockResolvedValue({ data: capture({ status: { ...capture().status, received_events: 4 } }) });
+  await render();
+  expect(container.querySelector('[data-testid="connection-status"]').textContent).toBe('Receipt timing is unconfirmed');
+  expect(container.querySelector('[data-testid="connection-status"]').textContent).not.toContain('first app call');
+});
+
+test('revoked key metadata explains replacement and does not mark a usable connection', async () => {
+  guardianApi.listIngestionKeys.mockResolvedValue({ data: { credentials: [credential({ status: 'revoked', revoked_at: '2026-09-12T10:01:00Z' })] } });
+  await render();
+  expect(container.textContent).toContain('0 active keys');
+  expect(button('Integrate your app')).toBeUndefined();
+  expect(button('Connect your first app')).toBeDefined();
+  expect(container.textContent).toContain('Revoked keys cannot be restored');
+  expect(container.textContent).toContain('does not delete project history');
 });
 
 test.each(['viewer', 'operator'])('%s sees redacted keys and receipt state without management controls', async (role) => {
@@ -213,6 +330,8 @@ test('failed revocation retains key status and successful retry clears its revea
 test('lost capture refresh keeps previous counts labelled unknown and disables key mutation', async () => {
   await render(); guardianApi.getCapture.mockRejectedValueOnce(new Error('private-status-error'));
   await act(async () => button('Retry setup check').click());
+  expect(container.querySelector('[data-testid="connection-status"]').textContent).toBe('Connection status unavailable');
+  expect(container.querySelector('#connection-verify summary').textContent).toContain('Unknown');
   expect(container.textContent).toContain('Current receipt and processing state is unknown');
   expect(button('Create ingestion key')).toBeUndefined();
   expect(container.textContent).not.toContain('private-status-error');
@@ -224,7 +343,12 @@ test('unavailable counters never become a zero or no-real-traffic claim', async 
   await render();
   expect(container.textContent).toContain('Receipt timing is unknown');
   expect(container.textContent).not.toContain('No real event receipt is recorded');
-  expect([...container.querySelectorAll('dd')].filter(node => node.textContent === 'Unknown')).toHaveLength(4);
+  for (const label of ['Accepted real events', 'Events awaiting processing', 'Processed events', 'Conflicted events', 'Waiting to process']) {
+    const measurement = [...container.querySelectorAll('dt')].find((node) => node.textContent === label);
+    expect(measurement).toBeDefined();
+    expect(measurement.nextElementSibling.textContent).toBe('Unknown');
+    expect(measurement.nextElementSibling.textContent).not.toBe('0');
+  }
 });
 
 test('a late clipboard result cannot claim that a replacement key was copied', async () => {
@@ -294,7 +418,7 @@ test('provider onboarding defaults to Python Responses with unknown cost and ser
   expect(container.textContent).toContain('Token usage is reported; USD cost stays unknown.');
   expect(container.textContent).toContain('Configure duration/error rules and Slack notifications');
   expect([...container.querySelectorAll('a')].some((link) => link.textContent === 'captured activity' && link.getAttribute('href') === '/live')).toBe(true);
-  const advanced = [...container.querySelectorAll('details')].find((node) => node.querySelector('summary')?.textContent.startsWith('Advanced: Guardian JSON'));
+  const advanced = [...container.querySelectorAll('details')].find((node) => node.querySelector('summary')?.textContent.startsWith('Advanced: Sillage JSON'));
   expect(advanced.open).toBe(false); expect(advanced.textContent).toContain('REPLACE_WITH_CALL_START_UTC');
   expect(sendCaptureTest).not.toHaveBeenCalled(); expect(guardianApi.createIngestionKey).not.toHaveBeenCalled();
 });

@@ -1,6 +1,46 @@
-# Cost Guardian: onboarding and integration design
+# Sillage: onboarding and integration design
 
-Updated 2026-09-12. The full journeys below remain target behavior. A manual no-Langfuse path is implemented for an operator-configured isolated project: OIDC sign-in, owner-issued scoped ingestion keys, native terminal-event capture, separate test/real receipt state, processing backlog, saved monitoring rules, internal incident/run evidence and Slack destination test/activation. Use [CAPTURE.md](CAPTURE.md), [POLICIES.md](POLICIES.md), [NOTIFICATIONS.md](NOTIFICATIONS.md) and the [Python/Node senders](../examples/native-capture/README.md). This does not provision accounts, automatically instrument an SDK or establish customer activation. Existing access recovery and Langfuse diagnostics remain available under [ACCESS.md](ACCESS.md); named access is defined in [IDENTITY.md](IDENTITY.md).
+## Standards-based Python connection, 0.2.0
+
+The default Connections choice uses the installable wheel with the **OpenInference** extra. Choose the layer the application actually calls: OpenAI for direct OpenAI usage, LiteLLM for Founder Path, or the supported LangChain model integration. Select one layer; combining framework/provider instrumentors can double-count one provider request or produce unrelated traces. The native adapter remains an explicit compatibility choice, and bare `sillage-run` preserves its existing native default.
+
+Download `sillage_observe-0.2.0-py3-none-any.whl`, activate the application's environment and install the local artifact. The extra installs pinned open-source dependencies from the configured package index; the package itself is not published on PyPI. Review compatibility without silently downgrading an application's existing dependencies. From the download folder:
+
+```sh
+python -m pip install './sillage_observe-0.2.0-py3-none-any.whl[openinference]'
+```
+
+Set `SILLAGE_URL`, `SILLAGE_INGEST_KEY` and an optional technical `SILLAGE_SERVICE_NAME` using the displayed server-side template. A loopback HTTP preview additionally requires `SILLAGE_ALLOW_LOCAL=true`. Then return to the application's usual working directory. For Founder Path's LiteLLM stack, check first:
+
+```sh
+sillage-run --instrumentation openinference --instrumentors litellm --check
+```
+
+Check that the selected SDK/instrumentor is supported before continuing. Valid configuration is separate from `instrumentation_ready`; a local check does not contact the collector or establish receipt. Preserve the application's normal arguments and port when launching, with one process and no reloader:
+
+```sh
+sillage-run --instrumentation openinference --instrumentors litellm -- python -m uvicorn server:app
+```
+
+Applications already instrumented with OpenTelemetry can install the `[otel]` extra and attach `SillageSpanProcessor` once to their existing provider. Keep the existing provider/sampler/exporters. Teams already sending to Langfuse can retain that source path instead of reinstrumenting the same calls. [Current package APIs and exact versions](../packages/sillage-python/README.md), [projection/ownership contract](OPENTELEMETRY.md).
+
+Run a real application action and verify both receipt and processing. Real OTel IDs group calls; supplied agent context can name them. A model integration cannot automatically infer custom business workflows or every retrieval step. Missing parent spans are displayed as references, not fabricated nodes. Unknown usage/outcomes remain unknown, and the bridge does not infer prices. Full OTLP reception, full RAG span storage and self-service account provisioning remain separate work. Current final artifact/end-to-end verification is pending in [VALIDATION.md](VALIDATION.md); earlier native results do not certify this standards path.
+
+**Choose the capture path with its current stream limits in mind.** The installed OpenInference checks missed four early-closed stream calls and one cancelled call because no ended span reached the processor. These are missing calls, not rows with unknown status. Captured OpenAI Responses and successful LiteLLM returns can have unknown outcomes when upstream omits terminal evidence; exception spans can still report errors. A streaming/cancellation-heavy application should use a separately verified compatible native/manual path or await upstream coverage fixes. Do not infer that every call was observed from a healthy collector or from other calls appearing successfully.
+
+## Implemented entry and connection journey, 2026-09-13
+
+1. Open `/welcome` to understand the product, then `/demo` to select sample runs, inspect timing/tokens/cost, filter calls needing attention and try an incident resolution. These samples never populate a real workspace and work without private APIs.
+2. Select **Connect your app**. The `/setup` route first verifies workspace access and restores Connections after organization sign-in. An existing member signs in with the configured identity provider. A new user must ask the owner for membership; self-service signup and workspace creation are still unimplemented. Local shared-key deployments explain the separate workspace access key.
+3. In **Connections**, check the actual project, source and server address. Direct capture leads with three steps: **Create an application key → Install and start your app → Verify your first real call**. The default Python path downloads the 0.2.0 wheel and selects OpenInference explicitly as shown above. Install it in the application's existing environment, set the Sillage address/key, check the selected layer, then start the original app. PowerShell/Bash templates keep the one-time key out of copied commands. Native compatibility and **Manual Python / Node** remain alternatives. Keep the key on the application server. Sillage requires no model-provider key.
+4. Run the application for a real captured call; check its receipt, pending work and worker state. Open Live activity or Overview to confirm committed numeric evidence. A connection test is optional and excluded from production counts. `sillage-run --check` checks only local settings and SDK compatibility; neither that check nor an accepted receipt establishes completed analysis.
+5. Inspect a run, then configure optional monitoring rules and notifications when ready. Key inventory supports rotation/revocation. Advanced JSON and diagnostics remain available without obscuring the initial path. Langfuse deployments explain their configured source and operator-managed connection separately.
+
+The authenticated Python package route is `/api/guardian/integrations/python.whl`; its fixed attachment is `sillage_observe-0.2.0-py3-none-any.whl`. It is a local installable artifact, not a published PyPI package. The [package guide](../packages/sillage-python/README.md) owns the exact SDK/instrumentor compatibility matrix and stream limits for each selected layer; native compatibility retains its earlier OpenAI 1.99.9/LiteLLM 1.80.0 matrix. Existing manual archives at `/api/guardian/integrations/python.zip` and `/api/guardian/integrations/node.zip` contain three modules plus instructions. No artifact contains credentials. Raw prompts, responses, retrieved documents, full RAG hierarchy and general OTLP reception remain outside this capture contract. [OPENTELEMETRY.md](OPENTELEMETRY.md), [PROVIDERS.md](PROVIDERS.md), [EXPERIENCE.md](EXPERIENCE.md) and [VALIDATION.md](VALIDATION.md).
+
+## Earlier journey design and remaining target behavior
+
+Updated 2026-09-13. The full journeys below remain target behavior. An operator-configured isolated project supports OIDC sign-in, scoped ingestion keys, native capture, separate test/real receipt state, processing backlog, saved monitoring rules, internal incident/run evidence and Slack destination test/activation. The Python launcher now adds bounded automatic SDK capture; manual Python/Node integration remains available. Use [CAPTURE.md](CAPTURE.md), [POLICIES.md](POLICIES.md), [NOTIFICATIONS.md](NOTIFICATIONS.md) and the [Python/Node senders](../examples/native-capture/README.md). This does not provision accounts or establish independent customer activation. Existing access recovery and Langfuse diagnostics remain available under [ACCESS.md](ACCESS.md); named access is defined in [IDENTITY.md](IDENTITY.md).
 
 ## Entry experience
 
