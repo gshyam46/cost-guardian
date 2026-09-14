@@ -6,7 +6,7 @@ RUN npm ci --include=dev
 COPY apps/guardian/frontend/craco.config.js apps/guardian/frontend/jsconfig.json apps/guardian/frontend/postcss.config.js apps/guardian/frontend/tailwind.config.js ./
 COPY apps/guardian/frontend/src ./src
 COPY apps/guardian/frontend/public/index.html ./public/index.html
-COPY apps/guardian/frontend/public/favicon.svg apps/guardian/frontend/public/favicon.ico apps/guardian/frontend/public/apple-touch-icon.png apps/guardian/frontend/public/manifest.json apps/guardian/frontend/public/InstrumentSerif-OFL.txt apps/guardian/frontend/public/Manrope-OFL.txt ./public/
+COPY apps/guardian/frontend/public/favicon.svg apps/guardian/frontend/public/favicon.ico apps/guardian/frontend/public/apple-touch-icon.png apps/guardian/frontend/public/manifest.json apps/guardian/frontend/public/HankenGrotesk-OFL.txt apps/guardian/frontend/public/IBMPlexMono-OFL.txt ./public/
 ENV CI=true NODE_ENV=production REACT_APP_GUARDIAN_URL=/ GENERATE_SOURCEMAP=false \
     DISABLE_HOT_RELOAD=true REACT_APP_ENABLE_VISUAL_EDITS=false ENABLE_HEALTH_CHECK=false
 RUN npm run build

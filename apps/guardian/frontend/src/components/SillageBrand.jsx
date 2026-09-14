@@ -9,6 +9,6 @@ export function SillageMark({ className = '', ...props }) {
 export function GuardianWordmark({ light = false }) {
   return <span className={`cg-wordmark ${light ? 'cg-wordmark-light' : ''}`}>
     <span className="cg-mark"><SillageMark /></span>
-    <span className="cg-wordmark-weight">sillage<span className="cg-wordmark-dot">.</span></span>
+    <span className="cg-wordmark-weight">sillage</span>
   </span>;
 }

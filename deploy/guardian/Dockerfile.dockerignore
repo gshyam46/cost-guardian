@@ -53,8 +53,8 @@
 !apps/guardian/frontend/public/favicon.ico
 !apps/guardian/frontend/public/apple-touch-icon.png
 !apps/guardian/frontend/public/manifest.json
-!apps/guardian/frontend/public/InstrumentSerif-OFL.txt
-!apps/guardian/frontend/public/Manrope-OFL.txt
+!apps/guardian/frontend/public/HankenGrotesk-OFL.txt
+!apps/guardian/frontend/public/IBMPlexMono-OFL.txt
 !apps/guardian/frontend/src/
 !apps/guardian/frontend/src/**/
 !apps/guardian/frontend/src/**/*.js

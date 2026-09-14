@@ -1,5 +1,42 @@
 # Sillage: validation record
 
+## Upright typography and lively interactive flow: 2026-09-15
+
+ADR-54 and the revision in [DESIGN_REFRESH.md](DESIGN_REFRESH.md) record the founder's correction before implementation. Hanken Grotesk replaces the serif/colored-italic headline pattern throughout Sillage; IBM Plex Mono is reserved for compact measurements. Cream/peach surfaces, brick controls, softer borders and user-driven movement replace the heavier presentation. The original wake mark and matching icons remain.
+
+The demo now supports keyboard-selectable call-flow nodes, curved replay paths, pause/restart, a native timeline scrubber, duration/token/reported-cost lenses and a separate sample duration-rule comparison. Flow nodes and the timeline share selected evidence; pending nodes cannot reveal measurements. User selection pauses playback. Reduced motion hides the travelling marker and removes hover transforms. The connection explorer switches between supported Python, existing telemetry and explicit integration paths. Demo changes remain local; original sample incidents, unknown values, registration storage and workspace authentication are unchanged.
+
+| Check | Final result | Evidence |
+| --- | --- | --- |
+| Complete frontend suite | **410 passed**, 14 suites, zero failures/skips; **18.641 s** | `tools/reports/revision-frontend.json` and raw Jest report. Includes 12 focused replay/flow/lens/rule tests. |
+| Static asset boundary | **53 passed, one platform skip**, **15.35 s** | Backend `tests/test_deployment_static.py`; fixed new license paths through existing snapshot/size/symlink guards. Windows symlink privilege skip. |
+| Workspace browser scenarios | **69 passed** | `tools/reports/browser-revision/report.json`; synthetic API/identity transports, exact final workspace bundle. |
+| Actual public registration and demo | **11 phases passed**, **10.963 s** | `tools/reports/public-launch-50edc462fd/report.json`; actual Node HTTP handlers, Mongo 8.0.26 and Edge 152.0.4191.66. |
+| Native deployment and onboarding | **Eight phases passed**, **55.056 s** | `tools/reports/experience-native/report.json`; actual local OIDC, API/worker, Mongo, restart and outage recovery. |
+| Refreshed preview layout | **15 page/viewport combinations passed** | `tools/reports/design-preview/report.json`; landing/demo/signup/waitlist/privacy at 320, 390 and 1280 pixels, plus workspace welcome/sign-in and brand assets. |
+
+Both final builds use **78 explicit input hashes**, include **13 recorded artifacts** and pass source/asset consistency, no-source-map, local-font and secret-canary checks. Public compilation took **22.618 s** and workspace **10.936 s**. Two locally hosted WOFF2 files total **49,412 bytes**; full font notices and hashes are in [BRAND.md](BRAND.md). Old font assets and their unused notices are removed from the source, Docker and CI allowlists. No font request reaches a third party at runtime. Reports are `tools/reports/revision-public-build.json` and `revision-workspace-build.json`.
+
+| Artifact | Public | Workspace |
+| --- | --- | --- |
+| JavaScript | `main.ea1146ee.js` | `main.3aee2015.js` |
+| JS SHA256 | `e90afc3b79339a4744dac83d2197c33dfd296071d2c5ecefd61d4c3bb08f7ae7` | `18309c31f9c05009a315ee4f69bd71ddfc86dc566153496eda734c873406a52a` |
+| Manifest SHA256 | `d6e5d4aa7d9a5bcad64e0750f260176550efc04730d042a276987eb1817c1366` | `ca9f15fd26d79c4c2c872048b31d04cfc2515004641ba60f08dacb065c29e3c1` |
+
+Shared CSS is `main.f648710d.css`, SHA256 `4806878ab51e4588fbe68d2bbf9823ecf81c6b0275f50cf916c11cb411bffe56`. The public artifact remains under `.cache/public-dependencies/frontend-clean-verified/build`; the ordinary build is its sibling `workspace-build`. Public acceptance uses a synthetic privacy contact; hosted production configuration is still required.
+
+Actual public acceptance covers replay/pause/continue, keyboard scrubbing, flow selection, pending-call protection, unknown cost/usage, threshold reset and saved-incident isolation, source switching and reduced motion. It also retains the committed registration, neutral direct/reloaded waitlist, retry after storage failure, duplicates, durable rate rollback, private export/deletion, expiry renewal and workspace outage/recovery checks. Only synthetic contacts were used, with zero private dashboard requests, paid calls or outreach. Test-owned browser/server/database/Mongo resources were cleaned.
+
+Native acceptance used two real local OIDC authorization/callback flows and the actual owner-key/test-receipt/sender/API/worker/incident path. The 10-token observation and unknown cost survived replay and restart; resolution remained committed. Mongo transport loss produced readiness 503 and recovery restored readiness. Final browser, database and process cleanup all passed. An earlier run completed all eight phases but timed out in direct database cleanup; its exact failing database operation was not recorded. The failed report is retained as `report-before-owned-db-cleanup-diagnostic.json`. Its fixture Mongo processes were stopped, and its synthetic data files remain offline in the ignored cache. The final sequential rerun passed without a product or harness behavior change.
+
+An initial preview refresh failed before its stop/record phase. A read-only diagnostic confirmed the existing API, identity and Mongo processes remained unchanged and ready. The retry refreshed the workspace successfully at **2026-09-14 19:46:33 UTC**, preserving `guardian_preview_mvp2`, existing sessions, workers and dependencies. Current API PID is **29852**, launcher **37236**; record `.cache/preview/experience-20260914T194551Z-2792e732/refresh.json`. The public preview was refreshed at **19:45:01 UTC** and runs as Node PID **41840**, preserving the separate `sillage_public_preview` database. Current local URLs are `http://127.0.0.1:3004` and `http://127.0.0.1:8001/welcome`.
+
+Preview checks confirmed actual font loading, upright single-color headings, no horizontal overflow, zero external requests, zero mutations and zero browser errors. The skip link is clipped when unfocused, appears at 12px when keyboard-focused and is clipped again after blur; this fixes its appearance in full-page screenshots after scrolling. Desktop landing/call flow, workspace sign-in and 320px signup were physically reviewed. Initial replay unit tests counted React's own scheduling timers; they now track the actual replay interval handles while retaining pause/reset/unmount assertions. No product timer change was required for that test correction.
+
+Final integrity checks passed with zero findings across 161 Python files, 39 active Markdown files, 79 code fences, 531 local links, source whitespace and both workflows using actionlint 1.7.11. Report: `tools/reports/deployment-integrity.json`, checked 2026-09-14 19:52:08 UTC. External documentation links were not fetched.
+
+These are local checks with illustrative data. Vercel/project linkage, a hosted interest database, a real monitored privacy contact, authenticated self-service accounts and the broader launch gates remain separate work. Docker image execution and hosted CI were not performed in this design slice. Earlier entries below describe superseded visual artifacts and retain their original evidence.
+
 ## Cream and brick design and registration journey: 2026-09-15
 
 ADR-53 and [DESIGN_REFRESH.md](DESIGN_REFRESH.md) recorded this slice before code. The landing/demo, public registration/sign-in and complete workspace now share cream/brick styling, locally hosted Instrument Serif/Manrope and matching wake logo, favicon, touch icon and manifest colors. Public navigation uses Sign up / Sign in / Register. Only an exact committed-save acknowledgment clears the form and shows a confirmed `/waitlist`; direct visits, reloads and forged URL/browser state remain neutral. The contact store and workspace identity/capture contracts are unchanged. Dates in this heading are local; report timestamps are UTC. Earlier sections retain historical artifact evidence, and some local build/report paths are reused by newer checks.

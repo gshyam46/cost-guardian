@@ -13,8 +13,9 @@
     --sillage-soft: #F0E8DD;
     --sillage-olive: #637044;
     --sillage-ochre: #9B6A2F;
-    --font-display: 'Instrument Serif', Georgia, serif;
-    --font-body: 'Manrope', 'Segoe UI', sans-serif;
+    --font-display: 'Hanken Grotesk', 'Segoe UI', sans-serif;
+    --font-body: 'Hanken Grotesk', 'Segoe UI', sans-serif;
+    --font-mono: 'IBM Plex Mono', Consolas, monospace;
 
     --background: 38 47% 93%;
     --foreground: 23 17% 15%;
@@ -87,7 +88,7 @@
   }
 
   code, pre {
-    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
 

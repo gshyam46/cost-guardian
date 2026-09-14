@@ -57,6 +57,10 @@ async function bounded(promise, ms) {
       await page.goto(config.origin + '/welcome');
       await page.getByRole('heading', { name: 'See the calls behind the answer.', exact: true }).waitFor();
       await page.evaluate(() => document.fonts.ready);
+      check(await page.evaluate(async () => {
+        const loaded = await Promise.all(['16px "Hanken Grotesk"', '12px "IBM Plex Mono"'].map(font => document.fonts.load(font)));
+        return loaded.every(faces => faces.length > 0 && faces.every(face => face.status === 'loaded'));
+      }), 'local_fonts_not_ready');
       check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'landing_desktop_overflow');
       await page.screenshot({ path: path.join(config.report_dir, 'public-landing-desktop.png'), fullPage: true });
       await page.setViewportSize({ width: 390, height: 844 });
@@ -66,6 +70,31 @@ async function bounded(promise, ms) {
       await page.waitForURL(config.origin + '/demo');
       await page.getByRole('heading', { name: 'A slow answer, explained.', exact: true }).waitFor();
       await page.getByText('Sample workspace', { exact: true }).first().waitFor();
+      const replay = page.getByRole('slider', { name: 'Replay position', exact: true });
+      const lenses = page.getByRole('group', { name: 'Measurement lens', exact: true });
+      const rule = page.getByRole('slider', { name: 'Demo duration rule', exact: true });
+      check(await replay.inputValue() === await replay.getAttribute('max'), 'demo_did_not_start_complete');
+      check(await page.getByRole('button', { name: 'Pause replay', exact: true }).count() === 0, 'demo_autoplayed');
+      await page.getByRole('button', { name: 'Replay sample', exact: true }).click();
+      await page.waitForFunction(() => Number(document.querySelector('[aria-label="Replay position"]').value) > 0);
+      await page.getByRole('button', { name: 'Pause replay', exact: true }).click();
+      const pausedAt = await replay.inputValue();
+      await delay(180);
+      check(await replay.inputValue() === pausedAt, 'demo_replay_pause_failed');
+      await replay.focus();
+      await page.keyboard.press('Home');
+      check(await replay.inputValue() === '0', 'demo_scrubber_cannot_rewind');
+      await page.keyboard.press('End');
+      check(await replay.inputValue() === await replay.getAttribute('max'), 'demo_scrubber_cannot_complete');
+      await lenses.getByRole('button', { name: 'Tokens', exact: true }).click();
+      check(await lenses.getByRole('button', { name: 'Tokens', exact: true }).getAttribute('aria-pressed') === 'true', 'demo_lens_not_selected');
+      await lenses.getByRole('button', { name: 'Duration', exact: true }).click();
+      const initialComparison = await page.getByLabel('Demo rule comparison', { exact: true }).innerText();
+      await rule.focus();
+      await page.keyboard.press('End');
+      check(await page.getByLabel('Demo rule comparison', { exact: true }).innerText() !== initialComparison, 'demo_rule_comparison_unchanged');
+      await page.getByRole('button', { name: 'Reset demo rule', exact: true }).click();
+      check(await page.getByLabel('Demo rule comparison', { exact: true }).innerText() === initialComparison, 'demo_rule_reset_failed');
       for (const [name, call] of [['Document search', 'Rewrite question'], ['Agent handoff', 'Run specialist'], ['Support answer', 'Draft answer']]) {
         const selected = page.getByRole('button', { name, exact: true });
         await selected.click();
@@ -86,6 +115,9 @@ async function bounded(promise, ms) {
       await page.getByRole('button', { name: 'Back to trace', exact: true }).click();
       check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'demo_mobile_overflow');
       await page.screenshot({ path: path.join(config.report_dir, 'public-demo-mobile.png'), fullPage: true });
+      await page.setViewportSize({ width: 320, height: 844 });
+      check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'demo_small_mobile_overflow');
+      await page.screenshot({ path: path.join(config.report_dir, 'public-demo-small-mobile.png'), fullPage: true });
       await page.setViewportSize({ width: 1280, height: 960 });
       check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'demo_desktop_overflow');
       await page.screenshot({ path: path.join(config.report_dir, 'public-demo-desktop.png'), fullPage: true });
@@ -333,6 +365,7 @@ async function bounded(promise, ms) {
       browser_version: browser.version(), external_requests: 0 };
     if (config.phase === 'first') result.public_experience = { responsive_landing: true, interactive_demo: true,
       selected_runs: 3, run_filter: true, selected_call: true, incident_round_trip: true, demo_resolution: true,
+      replay_pause: true, keyboard_scrub: true, measurement_lens: true, local_rule_comparison: true, minimum_mobile_width: 320,
       protected_requests: publicApiRequests.length,
       demo_created_private_access: false, connect_restored_setup: true, signed_out_demo_accessible: true,
       explicit_signin_route: true, connected_overview_to_demo: true };

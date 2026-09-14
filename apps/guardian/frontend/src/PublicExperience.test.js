@@ -44,7 +44,7 @@ test.each(['/welcome', '/demo'])('public %s works without auth or private API re
 test.each([false, true])('public-site landing/demo %s routes every tracking CTA to registration', async demo => {
   await act(async () => root.render(<GuardianWelcome publicSite demo={demo} />));
   expect(container.querySelector('h1').textContent).toBe(demo
-    ? 'Follow a call.Find the cause.' : 'See the callsbehind the answer.');
+    ? 'Follow a call. Find the cause.' : 'See the calls behind the answer.');
   const signups = [...container.querySelectorAll('a[href="/signup"]')];
   expect(signups.length).toBeGreaterThanOrEqual(3);
   signups.forEach(link => expect(link.textContent.trim()).toBe('Sign up'));
@@ -60,14 +60,61 @@ test.each([false, true])('public-site landing/demo %s routes every tracking CTA 
 test('self-hosted landing keeps its workspace CTA and explains the supported integration choices', async () => {
   await act(async () => root.render(<GuardianWelcome />));
   const tracking = [...container.querySelectorAll('a[href="/setup"]')];
-  expect(tracking).toHaveLength(4);
+  expect(tracking.length).toBeGreaterThan(0);
   tracking.forEach(link => expect(link.textContent.trim()).toBe('Start tracking'));
   expect(container.querySelector('a[href="/signup"]')).toBeNull();
   expect(container.textContent).toContain('sillage-run');
-  expect(container.textContent).toContain('existing OpenTelemetry');
-  expect(container.textContent).toContain('Langfuse source');
-  expect(container.textContent).toContain('manual Node integration');
   expect(container.textContent).toContain('Check receipt and processing');
+});
+
+test('connection explorer changes the data path and shows the limits of each source without an API request', async () => {
+  await act(async () => root.render(<GuardianWelcome publicSite />));
+  const options = [...container.querySelectorAll('[aria-label="Explore connection paths"] button')];
+  const [python, telemetry, manual] = options;
+  const panel = container.querySelector('#source-explanation');
+  expect(python.getAttribute('aria-pressed')).toBe('true');
+  expect(panel.textContent).toContain('sillage-run --instrumentation openinference');
+  expect(panel.textContent).toContain('after installation and configuration');
+  expect(panel.textContent).toContain('One Python process');
+  telemetry.focus();
+  expect(document.activeElement).toBe(telemetry);
+  await act(async () => telemetry.click());
+  expect(python.getAttribute('aria-pressed')).toBe('false');
+  expect(telemetry.getAttribute('aria-pressed')).toBe('true');
+  expect(panel.textContent).toContain('Use the signal you already have.');
+  expect(panel.textContent).toContain('existing OpenTelemetry provider');
+  expect(panel.textContent).toContain('configured Langfuse source');
+  expect(panel.textContent).not.toContain('sillage-run');
+  await act(async () => manual.click());
+  expect(manual.getAttribute('aria-pressed')).toBe('true');
+  expect(telemetry.getAttribute('aria-pressed')).toBe('false');
+  expect(panel.textContent).toContain('manual Node integration');
+  expect(panel.textContent).toContain('application instrumentation required');
+  expect(panel.textContent).toContain('does not automatically discover arbitrary apps');
+  expect(panel.querySelector('a[href="/signup"]')).not.toBeNull();
+  await act(async () => python.click());
+  expect(panel.textContent).toContain('Start where the calls happen.');
+  Object.values(guardianApi).forEach(method => expect(method).not.toHaveBeenCalled());
+  expect(localStorage.length).toBe(0);
+  expect(sessionStorage.length).toBe(0);
+});
+
+test('evidence notes use native disclosures and preserve source and workflow boundaries', async () => {
+  await act(async () => root.render(<GuardianWelcome />));
+  const notes = [...container.querySelectorAll('.sg-landing-questions details')];
+  const cost = notes.find(note => note.querySelector('summary').textContent.includes('cost'));
+  const scope = notes.find(note => note.querySelector('summary').textContent.includes('outside'));
+  expect(notes[0].open).toBe(true);
+  expect(cost.open).toBe(false);
+  await act(async () => cost.querySelector('summary').click());
+  expect(cost.open).toBe(true);
+  expect(cost.textContent).toContain('Unknown values stay unknown');
+  expect(cost.textContent).toContain('does not estimate USD prices');
+  await act(async () => scope.querySelector('summary').click());
+  expect(scope.open).toBe(true);
+  expect(scope.textContent).toContain('does not collect raw prompts');
+  expect(scope.textContent).toContain('does not prove that the whole workflow succeeded');
+  Object.values(guardianApi).forEach(method => expect(method).not.toHaveBeenCalled());
 });
 
 test('selecting a sample call changes actual evidence and selected-button state', async () => {

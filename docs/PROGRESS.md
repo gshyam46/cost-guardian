@@ -1,5 +1,13 @@
 # Sillage: current progress
 
+## Current continuation: lively interactive design, 2026-09-15
+
+ADR-54 and the revised [design contract](DESIGN_REFRESH.md) follow the founder's correction: upright, natural typography and a warmer, more lively experience. The public investigation now has clickable call-flow nodes, curved wake paths driven by replay, pause/restart/scrubbing, duration/token/cost lenses and a separate sample duration-rule comparison. The source explorer changes the displayed connection path. Sample state remains isolated from registration, authentication and customer telemetry.
+
+Hanken Grotesk replaces the serif/italic headline treatment throughout Sillage, with IBM Plex Mono used for compact measurements. Peach/cream surfaces, brick controls, softer edges and restrained hover responses carry through landing, demo, registration and workspace sign-in. Motion follows user interaction, with reduced-motion behavior and keyboard operation. Matching wake icons and the confirmed-save signup/waitlist contract remain intact.
+
+The final full frontend suite passed 410 tests across 14 suites. Both final modes build from 78 source inputs and include 13 recorded artifacts, with two locally hosted fonts totaling 49,412 bytes. Final browser/preview evidence and exact artifact hashes are recorded in [VALIDATION.md](VALIDATION.md). Hosted deployment and authenticated account provisioning remain separate work.
+
 ## Current continuation: cream and brick product design, 2026-09-15
 
 ADR-53 and [DESIGN_REFRESH.md](DESIGN_REFRESH.md) preceded code. The landing/demo now centres on a substantial interactive investigation, with a compact workflow and evidence explanation. The complete Sillage workspace and public access journey share cream paper, brick actions, brown ink, locally hosted Instrument Serif/Manrope and an original wake mark. Favicon, touch icon, manifest colors, charts, sidebar, forms, empty/error states and notifications follow the same system.

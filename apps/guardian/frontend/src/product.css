@@ -29,15 +29,15 @@
   gap: 10px;
   color: var(--sillage-ink);
   font-family: var(--font-display);
-  font-size: 34px;
-  font-weight: 400;
-  letter-spacing: -1px;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.045em;
   line-height: 1;
   white-space: nowrap;
 }
 
 .cg-wordmark-weight {
-  font-weight: 400;
+  font-weight: 650;
 }
 
 .cg-wordmark-dot {
@@ -189,8 +189,8 @@
 .cg-sample-title h2 {
   margin: 8px 0 22px;
   font-family: var(--font-display);
-  font-size: 34px;
-  font-weight: 400;
+  font-size: 28px;
+  font-weight: 600;
   line-height: 1.15;
   letter-spacing: -0.5px;
 }
@@ -375,7 +375,7 @@
 
 .cg-model {
   color: var(--sillage-muted);
-  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   overflow-wrap: anywhere;
 }
@@ -489,8 +489,8 @@
 .cg-demo-incident h3 {
   margin: 16px 0;
   font-family: var(--font-display);
-  font-size: 32px;
-  font-weight: 400;
+  font-size: 28px;
+  font-weight: 550;
   line-height: 1.2;
 }
 
@@ -702,8 +702,8 @@
 
 .cg-content h1, .cg-content .cg-page-title {
   font-family: var(--font-display);
-  font-size: 42px;
-  font-weight: 400;
+  font-size: 34px;
+  font-weight: 600;
   line-height: 1.15;
   letter-spacing: -0.6px;
   overflow-wrap: anywhere;
@@ -836,8 +836,9 @@
   display: flex;
   flex-direction: column;
   padding: 48px clamp(28px, 6vw, 88px);
-  background: var(--sillage-ink);
-  color: var(--sillage-paper);
+  background: #F3DECC;
+  border-right: 1px solid #E2C9B6;
+  color: var(--sillage-ink);
 }
 
 .cg-signin-story > a {
@@ -850,26 +851,21 @@
 }
 
 .cg-signin-story .cg-eyebrow {
-  color: #D3BCAC;
+  color: #756052;
 }
 
 .cg-signin-story h1 {
   margin: 24px 0;
   font-family: var(--font-display);
-  font-size: clamp(42px, 4.8vw, 68px);
-  font-weight: 400;
+  font-size: clamp(36px, 4.1vw, 58px);
+  font-weight: 550;
   line-height: 1.08;
-  letter-spacing: -1px;
-}
-
-.cg-signin-story h1 em {
-  color: #D99482;
-  font-weight: 400;
+  letter-spacing: -0.045em;
 }
 
 .cg-signin-story p {
   max-width: 360px;
-  color: #D3BCAC;
+  color: #756052;
   font-size: 15px;
   line-height: 1.85;
 }
@@ -878,7 +874,7 @@
   display: grid;
   gap: 14px;
   padding: 28px 0;
-  color: #E3D2C5;
+  color: var(--sillage-ink);
   font-size: 14px;
 }
 
@@ -889,19 +885,19 @@
 }
 
 .cg-signin-story li svg {
-  color: #D99482;
+  color: var(--sillage-brick);
 }
 
 .cg-signin-story > div > a {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  color: var(--sillage-paper);
+  color: var(--sillage-ink);
   font-size: 14px;
 }
 
 .cg-signin-story > small {
-  color: #C0AA99;
+  color: #756052;
   font-size: 12px;
 }
 
@@ -929,8 +925,8 @@
 .cg-signin-form h2 {
   margin: 16px 0;
   font-family: var(--font-display);
-  font-size: 44px;
-  font-weight: 400;
+  font-size: 36px;
+  font-weight: 550;
   line-height: 1.08;
   letter-spacing: -0.5px;
 }

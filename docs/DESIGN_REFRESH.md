@@ -1,5 +1,21 @@
 # Sillage: cream and brick design refresh
 
+## Revision requested by the founder, 2026-09-15
+
+The founder further asked for an interesting, lively and immersive feel. Keep the working investigation, but lighten heavy dark panels into cream/peach surfaces and add a clickable visual call flow. Curved wake paths and a replay-driven progress marker connect the actual sample calls; motion starts only through user interaction. Apply the same warmer surfaces to sign-in and registration. This is functional movement and selection feedback, with reduced-motion support.
+
+The first pass overused large serif headlines with a brick italic second phrase. The founder rejected that repeated pattern. Keep cream and brick, but replace the display/body pairing with one upright Hanken Grotesk family throughout the product; use IBM Plex Mono only for compact measurements and sequence labels. Headlines stay a single ink color. Hierarchy should come from size, weight, spacing, rules and composition rather than italic emphasis. The wake symbol remains the identity anchor, with a quieter upright wordmark.
+
+Make the sample investigation the main public experience: a working inspection surface with selectable runs/calls, user-triggered replay and pause, a keyboard-operable timeline scrubber, measurement lenses and an adjustable demo duration rule. These interactions operate only on labelled illustrative data. Scrubbing reveals recorded sample calls; it must not invent live traffic or imply raw-content/full-RAG capture. A rule comparison is a local simulation, not a saved production policy, incident mutation or projected savings claim. Keep unknown costs unknown and retain the existing incident/resolution interaction.
+
+Use an asymmetric, compact landing composition and a practical source-to-investigation explanation. No auto-playing demo, scroll interception, ornamental particle backgrounds or repeated feature-card grids. Respect reduced motion, tab order, touch targets and 320px layouts. Sign up, Sign in and committed-save waitlist behavior remain unchanged. Implement the landing composition and demo in parallel, then verify actual interactions and refresh both local previews. This revision supersedes the typography and headline treatment described in the original delivery below.
+
+### Revised delivery
+
+The revised experience is implemented: upright typography, lighter peach/cream surfaces, interactive curved call flow, user-controlled replay/scrubbing, measurement lenses, sample rule comparison and the source explorer. Pending flow nodes cannot reveal uncaptured measurements. Selecting a flow node pauses replay and opens the same evidence as the timeline. Reduced motion hides the travelling marker and removes hover transforms; native keyboard controls remain available.
+
+The final builds and all 410 frontend tests pass. Both local previews are refreshed; registration records remain in their separate local database and existing workspace data is preserved. [VALIDATION.md](VALIDATION.md) records current browser, native and artifact evidence. The original delivery below is retained as history.
+
 Recorded before implementation on 2026-09-14, following the founder's request for a premium, less formulaic product identity across the public site and workspace.
 
 ## Direction

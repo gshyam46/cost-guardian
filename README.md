@@ -1,6 +1,6 @@
 # Sillage
 
-**Cream and brick redesign implemented:** the landing page, interactive demo, registration, sign-in and workspace share a new visual system, locally hosted Instrument Serif/Manrope fonts and an original wake logo with matching icons. Public navigation uses **Sign up / Sign in**; **Register** leads to `/waitlist` only after confirmed storage. [Design decisions](docs/DESIGN_REFRESH.md) and [current verification](docs/VALIDATION.md).
+**Cream and brick design:** the landing page, interactive demo, registration, sign-in and workspace share upright Hanken Grotesk typography, restrained IBM Plex Mono measurements and an original wake logo with matching icons. The latest revision replaces the earlier serif/colored-italic headlines and adds a user-controlled sample investigation. Public navigation uses **Sign up / Sign in**; **Register** leads to `/waitlist` only after confirmed storage. [Design decisions](docs/DESIGN_REFRESH.md) and [current verification](docs/VALIDATION.md).
 
 **Current local previews, refreshed 2026-09-15:** [public landing and signup](http://127.0.0.1:3004) and [Sillage workspace](http://127.0.0.1:8001/welcome). Public preview registrations persist in the separate local `sillage_public_preview` database; its privacy contact is synthetic. These are local review services, not a hosted public launch. The existing workspace database was preserved.
 

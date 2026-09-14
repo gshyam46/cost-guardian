@@ -1,5 +1,11 @@
 # Sillage: implementation plan
 
+## Founder design correction, 2026-09-15
+
+Follow ADR-54 and the revision in [DESIGN_REFRESH.md](DESIGN_REFRESH.md): remove the colored italic headline pattern throughout Sillage, replace the font pairing with upright Hanken Grotesk and small measurement-only IBM Plex Mono, and make the demo an interactive inspection desk. Build user-controlled replay/scrubbing, evidence lenses and an explicitly simulated rule comparison without changing customer data or auth. Verify interactions, both clean build modes, mobile/desktop views and local previews; update the current evidence before delivery.
+
+Implemented locally: the revised call-flow demo, source explorer, warmer surfaces and upright typography are complete. Final builds and 410 frontend tests pass. Current acceptance and preview status are recorded in [VALIDATION.md](VALIDATION.md); hosted setup and independent customer activation remain the next product gates.
+
 ## Cream and brick product refresh, 2026-09-14
 
 Follow ADR-53 and [DESIGN_REFRESH.md](DESIGN_REFRESH.md): redesign the landing/demo, complete workspace theme, local typography and matching vector brand assets; use normal Sign up/Sign in navigation with confirmed registration leading to a waitlist page. Preserve storage/auth semantics, verify both build modes and desktop/mobile journeys, refresh the owned preview and update documentation with measured results.

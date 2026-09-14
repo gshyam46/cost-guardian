@@ -20,7 +20,7 @@ _DETAIL = re.compile(r"/(?:incidents|runs)/[A-Za-z0-9_.:-]{1,128}\Z")
 _SHELL = frozenset({"/", "/welcome", "/demo", "/signin", "/setup", "/live", "/incidents"})
 _PUBLIC = {"/favicon.ico": "image/x-icon", "/favicon.svg": "image/svg+xml",
            "/apple-touch-icon.png": "image/png", "/manifest.json": "application/manifest+json",
-           "/InstrumentSerif-OFL.txt": "text/plain", "/Manrope-OFL.txt": "text/plain", "/robots.txt": "text/plain"}
+           "/HankenGrotesk-OFL.txt": "text/plain", "/IBMPlexMono-OFL.txt": "text/plain", "/robots.txt": "text/plain"}
 _MIME = {".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png",
          ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp",
          ".ico": "image/x-icon", ".woff": "font/woff", ".woff2": "font/woff2", ".ttf": "font/ttf"}

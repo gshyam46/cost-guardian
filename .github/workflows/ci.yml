@@ -401,7 +401,7 @@ jobs:
               destination = target / relative
               destination.parent.mkdir(parents=True, exist_ok=True)
               shutil.copy2(path, destination)
-          for name in ('package.json', 'package-lock.json', 'craco.config.js', 'jsconfig.json', 'postcss.config.js', 'tailwind.config.js', 'public/index.html', 'public/favicon.svg', 'public/favicon.ico', 'public/apple-touch-icon.png', 'public/manifest.json', 'public/InstrumentSerif-OFL.txt', 'public/Manrope-OFL.txt'):
+          for name in ('package.json', 'package-lock.json', 'craco.config.js', 'jsconfig.json', 'postcss.config.js', 'tailwind.config.js', 'public/index.html', 'public/favicon.svg', 'public/favicon.ico', 'public/apple-touch-icon.png', 'public/manifest.json', 'public/HankenGrotesk-OFL.txt', 'public/IBMPlexMono-OFL.txt'):
               copy(name)
           for directory, folders, files in os.walk(source / 'src', followlinks=False):
               folders[:] = [name for name in folders if not name.startswith('.') and name not in ('node_modules', '__pycache__')]

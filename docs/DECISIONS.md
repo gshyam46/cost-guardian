@@ -1,5 +1,9 @@
 # Sillage: decision register
 
+## ADR-54: upright typography and an interactive evidence desk, 2026-09-15
+
+The founder rejected the repeated serif/colored-italic headline treatment. The revised [design contract](DESIGN_REFRESH.md) keeps cream/brick but uses one upright Hanken Grotesk family, with restrained IBM Plex Mono measurement labels. The landing centres on a user-controlled sample replay, selectable evidence lenses and an adjustable illustrative duration rule. All demo state stays local and labelled; no production policy, traffic, cost saving or full-workflow coverage is invented. Existing registration, auth and telemetry contracts remain authoritative.
+
 ## ADR-53: cream and brick identity and registration before waitlist, 2026-09-14
 
 The founder requested a complete Sillage theme refresh, premium typography and matching brand assets, with ordinary Sign up/Sign in actions and availability communicated after registration. [DESIGN_REFRESH.md](DESIGN_REFRESH.md) records the visual system, product scope and acceptance before implementation. Retain explicit contact consent and committed-write acknowledgment; the waitlist confirmation does not provision an account or workspace. Existing authentication, numeric telemetry and retention contracts remain authoritative.

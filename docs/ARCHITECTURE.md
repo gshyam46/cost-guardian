@@ -1,5 +1,13 @@
 # Sillage: architecture
 
+## Interactive public evidence, ADR-54
+
+The public demo is a browser-local React component over fixed illustrative terminal-call records. Replay starts only on user input; a bounded interval advances sample position, and pause, run changes and unmount release it. A native range input can seek the sample sequence. A code-native SVG call flow shares the same position, captured-call availability and selected evidence; selecting a node pauses playback. Its curved paths represent the illustrative sample ordering, not discovered workflow edges. Reduced motion hides the travelling marker while preserving keyboard interaction. Completed-call count determines which measurements are available for inspection. The sequence clock illustrates sample-list order and does not establish actual end-to-end workflow duration.
+
+Duration, token and reported-cost lenses change only the visual comparison. Missing values remain unknown. The adjustable duration limit is a separate local simulation over all sample calls; original incident evidence and the recorded rule remain unchanged. Resolution is local component state. The demo performs no telemetry, authentication or persistence requests. The source explorer explains actual supported connection choices without initiating a connection.
+
+Both modes use upright Hanken Grotesk and small measurement-only IBM Plex Mono labels, with no colored italic headline pairing. The existing wake icons, registration acknowledgment and private workspace runtime remain as described below.
+
 ## Cream/brick identity and registration confirmation, ADR-53
 
 The public and ordinary workspace builds share the same local typography, palette, original vector wake mark and named public brand assets. Font binaries compile into hashed static media; the backend snapshots only the fixed favicon/manifest/license filenames alongside manifest-listed assets, preserving file-size, traversal and immutable-snapshot boundaries. Container and CI build allowlists include these exact assets. [DESIGN_REFRESH.md](DESIGN_REFRESH.md) describes the visual contract.

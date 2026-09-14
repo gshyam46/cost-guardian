@@ -79,7 +79,7 @@ async function main(argv) {
       } });
     const publicPaths = new Set(['/', '/welcome', '/demo', '/signin', '/setup', '/signup', '/privacy', '/waitlist']);
     const assetPaths = new Set(Object.values(manifest.files).map(value => new URL(value, 'http://fixture.test').pathname));
-    for (const name of ['favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'manifest.json', 'InstrumentSerif-OFL.txt', 'Manrope-OFL.txt']) assetPaths.add('/' + name);
+    for (const name of ['favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'manifest.json', 'HankenGrotesk-OFL.txt', 'IBMPlexMono-OFL.txt']) assetPaths.add('/' + name);
     const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.txt': 'text/plain' };
     server = http.createServer(async (req, res) => {
       const pathname = new URL(req.url, origin).pathname;
@@ -112,10 +112,25 @@ async function main(argv) {
     await page.goto(origin);
     await page.getByRole('heading', { name: 'See the calls behind the answer.', exact: true }).waitFor();
     await page.evaluate(() => document.fonts.ready);
-    check(await page.evaluate(() => document.fonts.check('16px Manrope') && document.fonts.check('40px "Instrument Serif"')), 'local_fonts_not_ready');
+    check(await page.evaluate(async () => {
+      const loaded = await Promise.all(['16px "Hanken Grotesk"', '12px "IBM Plex Mono"'].map(font => document.fonts.load(font)));
+      return loaded.every(faces => faces.length > 0 && faces.every(face => face.status === 'loaded'));
+    }), 'local_fonts_not_ready');
     check(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--sillage-paper').trim().toLowerCase()) === '#f6f0e6', 'cream_palette_missing');
     check((await context.request.get(origin + '/favicon.svg')).headers()['content-type'].startsWith('image/svg+xml'), 'brand_favicon_missing');
     check((await context.request.get(origin + '/apple-touch-icon.png')).status() === 200, 'touch_icon_missing');
+    const sourcePaths = page.getByRole('group', { name: 'Explore connection paths', exact: true });
+    for (const [name, heading] of [
+      [/^Existing telemetry/, 'Use the signal you already have.'],
+      [/^Another application/, 'Send the measurements you own.'],
+      [/^A Python application/, 'Start where the calls happen.'],
+    ]) {
+      const source = sourcePaths.getByRole('button', { name });
+      await source.focus();
+      await page.keyboard.press('Enter');
+      check(await source.getAttribute('aria-pressed') === 'true', 'source_path_keyboard_selection_failed');
+      await page.locator('#source-explanation').getByRole('heading', { name: heading, exact: true }).waitFor();
+    }
     await page.screenshot({ path: path.join(reportDir, 'landing-desktop.png'), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'mobile_landing_overflow');
@@ -123,7 +138,92 @@ async function main(argv) {
     await page.setViewportSize({ width: 1280, height: 960 });
     await page.goto(origin + '/demo');
     await page.getByRole('heading', { name: 'A slow answer, explained.', exact: true }).waitFor();
+    phase = 'interactive_sample_evidence';
+    const replay = page.getByRole('slider', { name: 'Replay position', exact: true });
+    const callTimeline = page.getByLabel('Sample call timeline', { exact: true });
+    const callFlow = page.getByLabel('Sample call flow', { exact: true });
+    const classifyNode = callFlow.getByRole('button', { name: 'Inspect Classify question in flow', exact: true });
+    const draftNode = callFlow.getByRole('button', { name: 'Inspect Draft answer in flow', exact: true });
+    const rule = page.getByRole('slider', { name: 'Demo duration rule', exact: true });
+    const comparison = page.getByLabel('Demo rule comparison', { exact: true });
+    check(await replay.inputValue() === await replay.getAttribute('max'), 'demo_must_start_with_complete_sample');
+    check(await page.getByRole('button', { name: 'Pause replay', exact: true }).count() === 0, 'demo_autoplayed');
+    await classifyNode.focus();
+    await page.keyboard.press('Enter');
+    check(await classifyNode.getAttribute('aria-pressed') === 'true', 'demo_flow_keyboard_selection_failed');
+    await page.getByLabel('Sample trace detail', { exact: true }).getByRole('heading', { name: 'Classify question', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Restart replay', exact: true }).click();
+    check(await replay.inputValue() === '0', 'demo_restart_not_paused_at_start');
+    check(await callTimeline.getByRole('button').count() > 0
+      && await callTimeline.getByRole('button', { disabled: true }).count() === await callTimeline.getByRole('button').count(), 'demo_future_calls_exposed');
+    await page.getByText('Waiting for a captured call.', { exact: true }).waitFor();
+    await replay.focus();
+    await page.keyboard.press('ArrowRight');
+    check(Number(await replay.inputValue()) > 0, 'demo_scrubber_not_keyboard_operable');
+    await page.keyboard.press('End');
+    check(await replay.inputValue() === await replay.getAttribute('max'), 'demo_scrubber_cannot_reach_end');
+    check(await callTimeline.getByRole('button', { disabled: true }).count() === 0, 'demo_scrubber_did_not_reveal_recorded_calls');
+    check(await draftNode.isEnabled(), 'demo_scrubber_did_not_reveal_flow_call');
+    await draftNode.click();
+    check(await draftNode.getAttribute('aria-pressed') === 'true', 'demo_flow_captured_call_not_selected');
+    await page.getByLabel('Sample trace detail', { exact: true }).getByRole('heading', { name: 'Draft answer', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Replay sample', exact: true }).click();
+    check(await draftNode.isDisabled(), 'demo_replay_exposed_pending_flow_call');
+    await page.waitForFunction(() => Number(document.querySelector('[aria-label="Replay position"]').value) > 0);
+    await page.getByRole('button', { name: 'Pause replay', exact: true }).click();
+    const pausedAt = await replay.inputValue();
+    await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 180)));
+    check(await replay.inputValue() === pausedAt, 'demo_pause_did_not_stop');
+    await page.getByRole('button', { name: 'Continue replay', exact: true }).click();
+    await page.waitForFunction(value => Number(document.querySelector('[aria-label="Replay position"]').value) > Number(value), pausedAt);
+    await page.getByRole('button', { name: 'Pause replay', exact: true }).click();
+    await replay.focus();
+    await page.keyboard.press('End');
+    const capturedTimeline = await callTimeline.innerText();
+    const initialRule = await rule.inputValue();
+    const initialComparison = await comparison.innerText();
+    await rule.focus();
+    await page.keyboard.press('End');
+    check(await rule.inputValue() !== initialRule && await comparison.innerText() !== initialComparison, 'demo_rule_did_not_compare');
+    check(await callTimeline.innerText() === capturedTimeline, 'demo_rule_mutated_captured_evidence');
+    await page.getByRole('button', { name: 'Reset demo rule', exact: true }).click();
+    check(await rule.inputValue() === initialRule && await comparison.innerText() === initialComparison, 'demo_rule_reset_failed');
+    const lenses = page.getByRole('group', { name: 'Measurement lens', exact: true });
+    for (const lens of ['Tokens', 'Cost', 'Duration']) {
+      const button = lenses.getByRole('button', { name: lens, exact: true });
+      await button.focus();
+      await page.keyboard.press('Enter');
+      check(await button.getAttribute('aria-pressed') === 'true', 'demo_lens_keyboard_selection_failed');
+    }
+    await page.getByRole('button', { name: 'Agent handoff', exact: true }).click();
+    await lenses.getByRole('button', { name: 'Cost', exact: true }).click();
+    check((await callTimeline.innerText()).includes('Unknown'), 'demo_unknown_cost_was_invented');
+    await lenses.getByRole('button', { name: 'Tokens', exact: true }).click();
+    check((await callTimeline.innerText()).includes('Unknown'), 'demo_unknown_tokens_were_invented');
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.reload();
+    await page.getByRole('heading', { name: 'A slow answer, explained.', exact: true }).waitFor();
+    check(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches), 'reduced_motion_fixture_not_active');
+    check(await page.getByRole('button', { name: 'Pause replay', exact: true }).count() === 0, 'reduced_motion_demo_autoplayed');
+    await replay.focus();
+    await page.keyboard.press('Home');
+    check(await replay.inputValue() === '0', 'reduced_motion_scrubber_cannot_rewind');
+    for (let step = 0; step < 50; step += 1) await page.keyboard.press('ArrowRight');
+    check(await replay.inputValue() === '500', 'reduced_motion_midpoint_scrub_failed');
+    const flowMarkers = callFlow.locator('.sg-evidence-flow-marker');
+    check(await flowMarkers.count() > 0
+      && await flowMarkers.evaluateAll(markers => markers.every(marker => getComputedStyle(marker).display === 'none')), 'reduced_motion_flow_marker_visible');
+    await page.keyboard.press('End');
+    check(await replay.inputValue() === await replay.getAttribute('max'), 'reduced_motion_scrubber_cannot_complete');
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'mobile_demo_overflow');
+      await page.screenshot({ path: path.join(reportDir, `interactive-demo-${width}.png`), fullPage: true });
+    }
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.setViewportSize({ width: 1280, height: 960 });
     check(requests.length === 0, 'public_demo_requested_private_api');
+    passed('sample_replay_keyboard_scrub_lenses_local_rules_reduced_motion_and_mobile');
     passed('built_landing_and_demo_without_backend_or_session');
 
     phase = 'availability_browser';
@@ -166,7 +266,7 @@ async function main(argv) {
     const firstEmail = 'synthetic-founder@example.test';
     await fill(firstEmail, '=SYNTHETIC()');
     await page.getByRole('button', { name: 'Register', exact: true }).click();
-    await page.getByRole('heading', { name: 'You’re on the list.', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'You\u2019re on the list.', exact: true }).waitFor();
     await page.waitForURL(origin + '/waitlist');
     check(await page.getByLabel('Your name', { exact: false }).count() === 0, 'saved_registration_retained_form');
     const contact = await db.collection(COLLECTIONS.contacts).findOne({ _id: firstEmail });
@@ -178,7 +278,7 @@ async function main(argv) {
     phase = 'waitlist_confirmation_boundary';
     await page.reload();
     await page.getByRole('heading', { name: 'Find your way into Sillage.', exact: true }).waitFor();
-    check(await page.getByRole('heading', { name: 'You’re on the list.', exact: true }).count() === 0, 'waitlist_reload_claimed_registration');
+    check(await page.getByRole('heading', { name: 'You\u2019re on the list.', exact: true }).count() === 0, 'waitlist_reload_claimed_registration');
     await page.goto(origin + '/waitlist?registered=true');
     await page.getByRole('heading', { name: 'Find your way into Sillage.', exact: true }).waitFor();
     check(!(await page.locator('body').innerText()).includes('REGISTRATION RECEIVED'), 'waitlist_query_claimed_registration');
@@ -198,11 +298,11 @@ async function main(argv) {
     await page.getByRole('alert').waitFor();
     check((await page.getByRole('alert').innerText()).includes('could not confirm'), 'storage_failure_missing');
     check(await page.getByLabel('Email', { exact: false }).inputValue() === retryEmail, 'failed_submission_lost_input');
-    check(await page.getByRole('heading', { name: 'You’re on the list.', exact: true }).count() === 0 && page.url() === origin + '/signup', 'failed_write_claimed_saved');
+    check(await page.getByRole('heading', { name: 'You\u2019re on the list.', exact: true }).count() === 0 && page.url() === origin + '/signup', 'failed_write_claimed_saved');
     check(await db.collection(COLLECTIONS.contacts).countDocuments({ _id: retryEmail }) === 0, 'failed_write_created_contact');
     failStore = false;
     await page.getByRole('button', { name: 'Register', exact: true }).click();
-    await page.getByRole('heading', { name: 'You’re on the list.', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'You\u2019re on the list.', exact: true }).waitFor();
     passed('actual_http_storage_failure_retains_input_and_retry_saves');
 
     phase = 'duplicate_persistence';
