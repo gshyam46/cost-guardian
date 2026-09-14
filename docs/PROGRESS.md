@@ -1,6 +1,14 @@
 # Sillage: current progress
 
-## Current continuation: OpenTelemetry and OpenInference, 2026-09-13
+## Current continuation: public Vercel frontend, 2026-09-14
+
+ADR-52 and [PUBLIC_LAUNCH.md](PUBLIC_LAUNCH.md) preceded implementation. Public-mode landing/demo/signup/privacy routes and responsive access pages now work independently of workspace authentication. Sign-in/onboarding checks readiness with a deadline, shows coming-soon/currently-unavailable feedback and offers a workspace link only when ready. The independent registration function records consented, unverified early-access interest in a separate Mongo store; it never claims success before commit. Duplicate protection, transactional rate limits, expiry, private CSV export and exact-contact deletion are implemented.
+
+The final clean build passed 380 frontend tests, 23 server tests and six build/config checks. The built UI passed nine actual HTTP/browser/Mongo acceptance phases in 7.660 seconds, including backend outage registration, persistence through a new client, failed-write retry, duplicate concurrency and rate rollback. Desktop/mobile views were inspected; test-owned data and processes were cleaned. CI now has a separate public-launch job. [VALIDATION.md](VALIDATION.md) contains the proof and reproducible scope.
+
+**Deployment remains pending:** Vercel CLI reports logged out; no project or hosted registration database is linked. A real privacy contact and private environment configuration are also required before collection. This implements early-access registration, not public account creation, managed workspaces or verified email login. The existing local workspace/Founder previews were preserved. [WORKFLOW.md](WORKFLOW.md) explains how the monitored application uses its LLM while Sillage uses deterministic analysis.
+
+## Previous continuation: OpenTelemetry and OpenInference, 2026-09-13
 
 ADR-51 and [OPENTELEMETRY.md](OPENTELEMETRY.md) replace bespoke wrapping as the preferred new integration direction: the 0.2.0 Python wheel offers a selected upstream OpenInference instrumentor and a numeric `SillageSpanProcessor`. Existing OTel applications can attach the processor without replacing their provider, sampler or other exporters. Connections selects the standards path explicitly; unqualified CLI commands retain native behavior for existing users.
 

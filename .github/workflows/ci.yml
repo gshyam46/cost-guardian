@@ -293,6 +293,80 @@ jobs:
       - run: npm test -- --watchAll=false --runInBand
       - run: npm run build
 
+  public-launch:
+    name: Public site, registration persistence and browser journey
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/guardian/frontend/package-lock.json
+      - name: Install the public frontend and server dependencies from the exact lockfile
+        working-directory: apps/guardian/frontend
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Public function validation, persistence boundaries and build isolation
+        working-directory: apps/guardian/frontend
+        run: |
+          mkdir -p ../../../tools/reports
+          node --test --test-reporter=spec --test-reporter=junit --test-reporter-destination=stdout --test-reporter-destination=../../../tools/reports/public-server.xml server/public.test.cjs
+          node --test --test-reporter=spec --test-reporter=junit --test-reporter-destination=stdout --test-reporter-destination=../../../tools/reports/public-build.xml scripts/test-public-build.cjs
+      - name: Build the public site without monitoring credentials or local dotenv
+        working-directory: apps/guardian/frontend
+        env:
+          REACT_APP_PRIVACY_CONTACT_EMAIL: privacy@example.test
+        run: npm run build:public
+      - name: Install the isolated pinned browser fixture
+        run: |
+          npm install --prefix .cache/public-launch-browser --no-save --package-lock=false --ignore-scripts --no-audit --no-fund playwright@1.63.0
+          node .cache/public-launch-browser/node_modules/playwright/cli.js install --with-deps chromium
+      - name: Start this job's transaction-capable registration database
+        id: public-mongo
+        run: |
+          container_id=$(docker run -d --name sillage-public-mongo --label "sillage-ci-owner=$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-public-launch" -p 127.0.0.1:27021:27021 mongo:8.0.26 --port 27021 --replSet guardian-r102 --bind_ip_all)
+          echo "container_id=$container_id" >> "$GITHUB_OUTPUT"
+          for attempt in {1..30}; do
+            if docker exec "$container_id" mongosh --port 27021 --quiet --eval 'db.adminCommand({ping:1})'; then break; fi
+            sleep 1
+          done
+          docker exec "$container_id" mongosh --port 27021 --quiet --eval 'db.adminCommand({ping:1})'
+          docker exec "$container_id" mongosh --port 27021 --quiet --eval 'rs.initiate({_id:"guardian-r102",members:[{_id:0,host:"127.0.0.1:27021"}]})'
+          for attempt in {1..30}; do
+            if docker exec "$container_id" mongosh --port 27021 --quiet --eval 'if (!db.hello().isWritablePrimary) quit(1)'; then break; fi
+            sleep 1
+          done
+          docker exec "$container_id" mongosh --port 27021 --quiet --eval 'if (!db.hello().isWritablePrimary) quit(1)'
+      - name: Built public browser journey and acknowledged Mongo registration
+        run: node tools/test_public_launch.cjs --static-dir apps/guardian/frontend/build --dependencies apps/guardian/frontend/node_modules --playwright .cache/public-launch-browser/node_modules/playwright --mongo-url 'mongodb://127.0.0.1:27021/?replicaSet=guardian-r102&directConnection=true' --report-dir tools/reports/public-launch
+      - name: Save public launch evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: public-launch
+          path: |
+            tools/reports/public-server.xml
+            tools/reports/public-build.xml
+            tools/reports/public-launch/report.json
+            tools/reports/public-launch/*.png
+            apps/guardian/frontend/build/asset-manifest.json
+          retention-days: 14
+      - name: Stop only this job's owned registration database
+        if: always()
+        env:
+          PUBLIC_MONGO_ID: ${{ steps.public-mongo.outputs.container_id }}
+        run: |
+          if [[ -z "$PUBLIC_MONGO_ID" ]]; then exit 0; fi
+          [[ "$PUBLIC_MONGO_ID" =~ ^[a-f0-9]{64}$ ]] || exit 1
+          owner=$(docker inspect --format '{{ index .Config.Labels "sillage-ci-owner" }}' "$PUBLIC_MONGO_ID")
+          [[ "$owner" == "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-public-launch" ]] || exit 1
+          docker rm -f "$PUBLIC_MONGO_ID"
+
   native-deployment:
     name: Native packaged onboarding with actual local OIDC
     runs-on: ubuntu-latest

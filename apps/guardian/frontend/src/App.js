@@ -9,6 +9,7 @@ import GuardianIncidentDetail from "@/pages/GuardianIncidentDetail";
 import ConnectScreen from "@/pages/ConnectScreen";
 import GuardianSetup from "@/pages/GuardianSetup";
 import GuardianWelcome from "@/pages/GuardianWelcome";
+import PublicAccess, { PrivacyNotice } from '@/pages/PublicAccess';
 import { Button } from "@/components/ui/button";
 import guardianApi, { announceLogout, clearApiKey, clearSessionAccess, configureAuth, getApiKey, getLoginUrl, LOGOUT_NOTICE, setApiKey, setSessionAccess } from "@/services/guardianApi";
 import { beginLogin, restoreLoginPath, validAccess, validAuthConfig } from '@/services/guardianIdentity';
@@ -251,7 +252,21 @@ function GuardianApplication() {
 // into a workspace uses real links so the existing guarded login lifecycle runs.
 function App() {
   const path = window.location.pathname;
-  if (path === '/welcome' || path === '/demo') return <GuardianWelcome demo={path === '/demo'} />;
+  const publicSite = process.env.REACT_APP_PUBLIC_SITE === 'true';
+  if (path === '/welcome' || path === '/demo' || (publicSite && path === '/')) {
+    return <GuardianWelcome demo={path === '/demo'} publicSite={publicSite} />;
+  }
+  if (publicSite) {
+    if (path === '/privacy') return <PrivacyNotice />;
+    if (['/signin', '/setup', '/signup'].includes(path)) {
+      return <PublicAccess intent={path === '/signup' ? 'signup' : path === '/setup' ? 'onboarding' : 'signin'} />;
+    }
+    return <main className="cg-public flex min-h-screen items-center justify-center p-6"><div>
+      <h1 className="text-3xl font-semibold">This page is not available.</h1>
+      <p className="my-5">Explore Sillage or check workspace availability from the public site.</p>
+      <a className="cg-button-primary" href="/welcome">Return to Sillage</a>
+    </div></main>;
+  }
   return <GuardianApplication />;
 }
 

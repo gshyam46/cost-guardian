@@ -1,5 +1,13 @@
 # Sillage: architecture
 
+## Public frontend and independent registration, ADR-52, 2026-09-14
+
+The explicit Vercel public build serves the landing/demo, early-access form and privacy notice without mounting the workspace authentication lifecycle. Sign-in/onboarding call a same-origin Node availability function, which checks only the operator-configured HTTPS workspace's bounded `/api/ready` endpoint. Healthy readiness offers an explicit link to that workspace origin; missing configuration or failure keeps the visitor on the coming-soon/unavailable experience. Existing self-hosted builds retain their guarded routes, OIDC cookies and CSRF rules.
+
+The separate registration function persists an unverified contact with explicit consent in a dedicated Mongo replica-set database. Contact identity is the normalized email. A majority-acknowledged transaction reserves bounded global/HMAC-IP rate counters and inserts the contact; duplicate active registrations preserve the original details and expiry. Fresh consent after logical expiry can start a new period. TTL indexes implement 180-day retention, with logical expiry enforced by export/registration even before asynchronous deletion. Public success is returned only after commit. No password, workspace identity, provider key, raw IP or telemetry is stored by this flow.
+
+Index/schema bootstrap and private CSV export/single-contact deletion are separate operator commands. The browser build excludes local dotenv and server secrets. The monitoring API and workers remain persistent services; this deployment does not provision projects or move authentication across origins. [PUBLIC_LAUNCH.md](PUBLIC_LAUNCH.md) records the contract and deployment gates; [WORKFLOW.md](WORKFLOW.md) explains both journeys end to end.
+
 ## OpenTelemetry projection boundary, ADR-51, 2026-09-13
 
 [OPENTELEMETRY.md](OPENTELEMETRY.md) records the contract for the 0.2.0 Python client before implementation. The standards path delegates wrapping to one selected OpenInference instrumentor and attaches `SillageSpanProcessor` to a provider. The launcher owns a private provider passed explicitly to that instrumentor; an application with an existing `TracerProvider` can attach the processor itself. Neither integration replaces the global provider, its sampler, or another processor/exporter. The Connections default selects this standards path explicitly; the CLI's unqualified default remains the native adapter for compatibility.

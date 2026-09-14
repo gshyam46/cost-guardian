@@ -1,0 +1,267 @@
+#!/usr/bin/env node
+'use strict';
+
+// Real Node handlers, transactional Mongo writes and the built public UI.
+// Only synthetic contacts; the caller owns the loopback replica process.
+const fs = require('node:fs');
+const path = require('node:path');
+const http = require('node:http');
+const { randomUUID, createHash } = require('node:crypto');
+const { parseArgs } = require('node:util');
+
+const HELP = 'node tools/test_public_launch.cjs --static-dir <public-build> --dependencies <frontend-node_modules> --playwright <playwright-module> --mongo-url <owned-loopback-replica> --report-dir <new-report-directory>\nUses a unique marked test database, removes only that database, and never loads dotenv.\n';
+const check = (value, code) => { if (!value) throw new Error(code); };
+
+async function main(argv) {
+  if (!argv.length || argv.includes('--help')) { process.stdout.write(HELP); return; }
+  const { values: args } = parseArgs({ args: argv, options: Object.fromEntries(
+    ['static-dir', 'dependencies', 'playwright', 'mongo-url', 'report-dir'].map(key => [key, { type: 'string' }])) });
+  check(Object.keys(args).length === 5, 'all_arguments_required');
+  const mongoTarget = new URL(args['mongo-url']);
+  check(mongoTarget.protocol === 'mongodb:' && mongoTarget.hostname === '127.0.0.1' && mongoTarget.port
+    && !mongoTarget.username && !mongoTarget.password && ['/', ''].includes(mongoTarget.pathname)
+    && mongoTarget.searchParams.get('replicaSet') === 'guardian-r102'
+    && mongoTarget.searchParams.get('directConnection') === 'true'
+    && [...mongoTarget.searchParams].length === 2, 'owned_loopback_replica_required');
+  const staticDir = fs.realpathSync(args['static-dir']);
+  const manifestBytes = fs.readFileSync(path.join(staticDir, 'asset-manifest.json'));
+  const manifest = JSON.parse(manifestBytes);
+  check(Object.values(manifest.files).some(value => value.endsWith('.js')), 'built_assets_required');
+  const reportDir = path.resolve(args['report-dir']);
+  fs.mkdirSync(reportDir, { recursive: false });
+  const { MongoClient } = require(path.resolve(args.dependencies, 'mongodb'));
+  const { chromium } = require(path.resolve(args.playwright));
+  const serverRoot = path.join(__dirname, '../apps/guardian/frontend/server');
+  const { MongoInterestStore, COLLECTIONS, CLIENT_OPTIONS, bootstrap } = require(path.join(serverRoot, 'mongo.cjs'));
+  const { PublicError, interestRecord, validateInterest, rateBuckets } = require(path.join(serverRoot, 'contract.cjs'));
+  const { createInterestHandler } = require(path.join(serverRoot, 'interest.cjs'));
+  const { createAvailabilityHandler } = require(path.join(serverRoot, 'availability.cjs'));
+  const { exportContacts, run: admin } = require(path.join(serverRoot, 'interest-admin.cjs'));
+  const identity = randomUUID();
+  const dbName = 'sillage_interest_test_' + identity.replaceAll('-', '');
+  const clients = [];
+  const client = new MongoClient(args['mongo-url'], CLIENT_OPTIONS);
+  clients.push(client);
+  const db = client.db(dbName);
+  const phases = [];
+  const started = Date.now();
+  let owned = false, server, browser, browserServer, phase = 'mongo_identity', success = false, clean = false, failureCode;
+  let origin, availability = 'coming_soon', failStore = false, ip = '203.0.113.1', probes = 0;
+  const requests = [], errors = [], blocked = [];
+  const passed = name => { phases.push(name); process.stdout.write(JSON.stringify({ passed: name }) + '\n'); };
+  const body = (email, extra = {}) => ({ schema_version: 1, name: 'Synthetic Founder', email,
+    consent: true, source: 'signup', ...extra });
+  try {
+    const hello = await client.db('admin').command({ hello: 1 });
+    check(hello.setName === 'guardian-r102' && hello.isWritablePrimary, 'replica_identity_mismatch');
+    check(!(await client.db('admin').admin().listDatabases({ nameOnly: true })).databases.some(row => row.name === dbName), 'fixture_database_exists');
+    await db.collection('_fixture_owner').insertOne({ _id: identity });
+    owned = true;
+    await bootstrap(client, dbName);
+    const store = new MongoInterestStore(client, dbName);
+    for (const collection of [COLLECTIONS.contacts, COLLECTIONS.rates]) {
+      const indexes = await db.collection(collection).listIndexes().toArray();
+      check(indexes.some(index => index.key.expiresAt === 1 && index.expireAfterSeconds === 0), 'ttl_index_missing');
+    }
+    passed('actual_replica_bootstrap_and_ttl_indexes');
+
+    const env = { SILLAGE_INTEREST_HMAC_KEY: 'synthetic-public-launch-hmac-key-'.repeat(2) };
+    const interest = createInterestHandler({ env, clientIp: () => ip,
+      originCheck: req => { if (req.headers.origin !== origin) throw new PublicError('invalid_origin', 403); },
+      store: { register: (...values) => { if (failStore) throw new Error('synthetic_database_outage'); return store.register(...values); } } });
+    const coming = createAvailabilityHandler({ env: {} });
+    const workspace = createAvailabilityHandler({ env: { SILLAGE_WORKSPACE_URL: 'https://workspace.example.test' },
+      transport: async target => {
+        check(target === 'https://workspace.example.test/api/ready', 'unexpected_readiness_target');
+        probes += 1;
+        if (availability === 'hanging') return new Promise(() => {});
+        return availability === 'ready';
+      } });
+    const publicPaths = new Set(['/', '/welcome', '/demo', '/signin', '/setup', '/signup', '/privacy']);
+    const assetPaths = new Set(Object.values(manifest.files).map(value => new URL(value, 'http://fixture.test').pathname));
+    const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.ico': 'image/x-icon' };
+    server = http.createServer(async (req, res) => {
+      const pathname = new URL(req.url, origin).pathname;
+      if (pathname.startsWith('/api/')) requests.push({ pathname, authorization: !!req.headers.authorization, cookie: !!req.headers.cookie });
+      if (pathname === '/api/interest') return interest(req, res);
+      if (pathname === '/api/availability') return (availability === 'coming_soon' ? coming : workspace)(req, res);
+      let relative = publicPaths.has(pathname) ? 'index.html' : assetPaths.has(pathname) ? pathname.slice(1) : null;
+      if (!relative || !['GET', 'HEAD'].includes(req.method)) { res.writeHead(404); res.end(); return; }
+      const target = path.resolve(staticDir, relative);
+      if (!target.startsWith(staticDir + path.sep) || !fs.existsSync(target)) { res.writeHead(404); res.end(); return; }
+      res.writeHead(200, { 'Content-Type': mime[path.extname(target)] || 'application/octet-stream', 'Cache-Control': 'no-store' });
+      res.end(req.method === 'HEAD' ? undefined : fs.readFileSync(target));
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    origin = `http://127.0.0.1:${server.address().port}`;
+    const post = input => fetch(origin + '/api/interest', { method: 'POST',
+      headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+    phase = 'public_browser';
+    browserServer = await chromium.launchServer({ ...(process.platform === 'win32' ? { channel: 'msedge' } : {}), headless: true });
+    browser = await chromium.connect(browserServer.wsEndpoint());
+    const context = await browser.newContext({ viewport: { width: 1280, height: 960 }, serviceWorkers: 'block' });
+    await context.route('**/*', route => {
+      if (new URL(route.request().url()).origin !== origin) { blocked.push(true); return route.abort(); }
+      return route.continue();
+    });
+    await context.addInitScript(() => localStorage.setItem('guardian_api_key', 'synthetic-private-key-must-not-be-sent'));
+    const page = await context.newPage();
+    page.setDefaultTimeout(12000);
+    page.on('pageerror', () => errors.push(true));
+    await page.goto(origin);
+    await page.getByRole('heading', { name: 'See what your AI is doing.', exact: true }).waitFor();
+    await page.screenshot({ path: path.join(reportDir, 'landing-desktop.png'), fullPage: true });
+    await page.goto(origin + '/demo');
+    await page.getByRole('heading', { name: 'A slow answer, explained.', exact: true }).waitFor();
+    check(requests.length === 0, 'public_demo_requested_private_api');
+    passed('built_landing_and_demo_without_backend_or_session');
+
+    phase = 'availability_browser';
+    await page.goto(origin + '/signin');
+    await page.getByRole('heading', { name: 'Early access is coming soon', exact: true }).waitFor();
+    check(probes === 0, 'unconfigured_workspace_was_probed');
+    await page.screenshot({ path: path.join(reportDir, 'coming-soon-desktop.png'), fullPage: true });
+    availability = 'down';
+    await page.getByRole('button', { name: 'Retry access', exact: true }).click();
+    await page.getByRole('heading', { name: 'Currently unavailable', exact: true }).waitFor();
+    availability = 'hanging';
+    const beforeTimeout = Date.now();
+    await page.getByRole('button', { name: 'Retry access', exact: true }).click();
+    await page.getByRole('heading', { name: 'Currently unavailable', exact: true }).waitFor();
+    check(Date.now() - beforeTimeout < 6000, 'availability_deadline_unbounded');
+    availability = 'ready';
+    await page.getByRole('button', { name: 'Retry access', exact: true }).click();
+    await page.getByRole('heading', { name: 'Your workspace is ready.', exact: true }).waitFor();
+    check(await page.getByRole('link', { name: 'Sign in to your workspace', exact: true }).getAttribute('href') === 'https://workspace.example.test/signin', 'signin_link_invalid');
+    await page.goto(origin + '/setup');
+    await page.getByRole('heading', { name: 'Your workspace is ready.', exact: true }).waitFor();
+    check(await page.getByRole('link', { name: 'Connect your application', exact: true }).getAttribute('href') === 'https://workspace.example.test/setup', 'onboarding_link_invalid');
+    passed('unconfigured_down_hanging_recovered_workspace_and_explicit_links');
+
+    phase = 'browser_registration';
+    availability = 'down';
+    await page.goto(origin + '/setup');
+    await page.getByRole('heading', { name: 'Currently unavailable', exact: true }).waitFor();
+    await page.setViewportSize({ width: 390, height: 844 });
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'mobile_form_overflow');
+    await page.screenshot({ path: path.join(reportDir, 'unavailable-mobile.png'), fullPage: true });
+    const fill = async (email, company = 'Synthetic Company') => {
+      await page.getByLabel('Your name', { exact: false }).fill('Synthetic Founder');
+      await page.getByLabel('Email', { exact: false }).fill(email);
+      await page.getByLabel('Company', { exact: false }).fill(company);
+      await page.getByLabel('What are you building?', { exact: false }).fill('Synthetic acceptance test. No real customer data.');
+      await page.getByRole('checkbox').check();
+    };
+    const firstEmail = 'synthetic-founder@example.test';
+    await fill(firstEmail, '=SYNTHETIC()');
+    await page.getByRole('button', { name: 'Register interest', exact: true }).click();
+    await page.getByRole('heading', { name: 'Interest registered', exact: true }).waitFor();
+    const contact = await db.collection(COLLECTIONS.contacts).findOne({ _id: firstEmail });
+    check(contact?.source === 'onboarding' && contact.verified === false && contact.consent.accepted === true
+      && contact.consent.version && contact.expiresAt - contact.createdAt === 180 * 86400000, 'persistent_contact_contract_invalid');
+    await page.screenshot({ path: path.join(reportDir, 'registered-mobile.png'), fullPage: true });
+    passed('backend_down_registration_committed_with_consent_and_retention');
+
+    phase = 'registration_failure_retry';
+    ip = '203.0.113.2';
+    const beforeSignupProbes = probes;
+    await page.goto(origin + '/signup');
+    await page.getByRole('heading', { name: 'Get early access to Sillage.', exact: true }).waitFor();
+    check(probes === beforeSignupProbes, 'signup_depends_on_backend_probe');
+    const retryEmail = 'synthetic-retry@example.test';
+    await fill(retryEmail);
+    failStore = true;
+    await page.getByRole('button', { name: 'Register interest', exact: true }).click();
+    await page.getByRole('alert').waitFor();
+    check((await page.getByRole('alert').innerText()).includes('could not confirm'), 'storage_failure_missing');
+    check(await page.getByLabel('Email', { exact: false }).inputValue() === retryEmail, 'failed_submission_lost_input');
+    check(await page.getByRole('heading', { name: 'Interest registered', exact: true }).count() === 0, 'failed_write_claimed_saved');
+    check(await db.collection(COLLECTIONS.contacts).countDocuments({ _id: retryEmail }) === 0, 'failed_write_created_contact');
+    failStore = false;
+    await page.getByRole('button', { name: 'Register interest', exact: true }).click();
+    await page.getByRole('heading', { name: 'Interest registered', exact: true }).waitFor();
+    passed('actual_http_storage_failure_retains_input_and_retry_saves');
+
+    phase = 'duplicate_persistence';
+    ip = '203.0.113.3';
+    const duplicate = await Promise.all([post(body(firstEmail.toUpperCase(), { name: 'Replacement must not win' })), post(body(firstEmail))]);
+    check(duplicate.every(response => response.status === 202), 'concurrent_duplicate_failed');
+    check(duplicate.every(response => response.headers.get('cache-control').includes('no-store')), 'private_response_cacheable');
+    const reconnect = new MongoClient(args['mongo-url'], CLIENT_OPTIONS);
+    clients.push(reconnect);
+    const restored = await reconnect.db(dbName).collection(COLLECTIONS.contacts).findOne({ _id: firstEmail });
+    check(restored?.name === contact.name && restored.createdAt.getTime() === contact.createdAt.getTime()
+      && restored.expiresAt.getTime() === contact.expiresAt.getTime()
+      && await reconnect.db(dbName).collection(COLLECTIONS.contacts).countDocuments({ _id: firstEmail }) === 1, 'duplicate_replaced_original_or_lost_persistence');
+    passed('concurrent_normalized_duplicates_preserve_original_after_new_client');
+
+    phase = 'durable_rate_limit';
+    ip = '203.0.113.4';
+    for (let i = 0; i < 5; i++) check((await post(body(`synthetic-rate-${i}@example.test`))).status === 202, 'rate_fixture_admission_failed');
+    const contactCount = await db.collection(COLLECTIONS.contacts).countDocuments();
+    const rateBefore = await db.collection(COLLECTIONS.rates).find({}).sort({ _id: 1 }).toArray();
+    const limited = await post(body('synthetic-rejected@example.test'));
+    check(limited.status === 429 && Number(limited.headers.get('retry-after')) > 0, 'durable_rate_not_enforced');
+    check(await db.collection(COLLECTIONS.contacts).countDocuments() === contactCount, 'limited_contact_was_persisted');
+    const rateAfter = await db.collection(COLLECTIONS.rates).find({}).sort({ _id: 1 }).toArray();
+    check(JSON.stringify(rateBefore) === JSON.stringify(rateAfter), 'rejected_transaction_changed_rate_counters');
+    check(!JSON.stringify(rateAfter).includes('203.0.113'), 'raw_ip_stored');
+    passed('real_transaction_rate_limit_rollback_and_no_raw_ip');
+
+    phase = 'operator_export_delete_expiry';
+    const csvPath = path.join(reportDir, 'synthetic-contacts.csv');
+    const exportResult = await exportContacts(db, csvPath);
+    check(exportResult.exported === contactCount && fs.readFileSync(csvPath, 'utf8').includes("\"'=SYNTHETIC()\""), 'export_not_complete_or_formula_safe');
+    fs.unlinkSync(csvPath); // Only this exact newly-created synthetic export.
+    const deleted = await admin(['delete', '--email', retryEmail.toUpperCase(), '--confirm-delete'], {
+      env: { SILLAGE_INTEREST_MONGO_URL: 'mongodb+srv://synthetic.example.test', SILLAGE_INTEREST_DB: dbName },
+      createClient: () => { const c = new MongoClient(args['mongo-url'], CLIENT_OPTIONS); clients.push(c); return c; } });
+    check(deleted.deleted === 1 && await db.collection(COLLECTIONS.contacts).countDocuments({ _id: retryEmail }) === 0
+      && await db.collection(COLLECTIONS.contacts).countDocuments({ _id: firstEmail }) === 1, 'single_contact_delete_invalid');
+    const renewalTime = new Date(contact.expiresAt.getTime() + 1);
+    const expiredPath = path.join(reportDir, 'synthetic-expired.csv');
+    const expired = await exportContacts(db, expiredPath, new Date(renewalTime.getTime() + 86400000));
+    check(expired.exported === 0, 'logically_expired_contacts_exported');
+    fs.unlinkSync(expiredPath);
+    await store.register(interestRecord(validateInterest(body(firstEmail, { name: 'Synthetic Renewal' })), renewalTime),
+      rateBuckets('203.0.113.8', env.SILLAGE_INTEREST_HMAC_KEY, renewalTime));
+    const renewal = await db.collection(COLLECTIONS.contacts).findOne({ _id: firstEmail });
+    check(renewal.name === 'Synthetic Renewal' && renewal.createdAt.getTime() === renewalTime.getTime(), 'expired_contact_not_renewed');
+    passed('actual_private_export_formula_safety_exact_delete_and_logical_expiry');
+
+    phase = 'public_privacy_and_isolation';
+    await page.goto(origin + '/privacy');
+    await page.getByRole('heading', { name: 'Early-access privacy notice', exact: true }).waitFor();
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'mobile_privacy_overflow');
+    check(!errors.length && !blocked.length, 'browser_runtime_error_or_external_request');
+    check(requests.every(request => ['/api/interest', '/api/availability'].includes(request.pathname)
+      && !request.authorization && !request.cookie), 'public_flow_used_workspace_auth');
+    check(await page.evaluate(() => localStorage.getItem('guardian_api_key')) === 'synthetic-private-key-must-not-be-sent', 'public_flow_modified_private_key');
+    passed('public_privacy_mobile_and_auth_isolation');
+    success = true;
+  } catch (error) {
+    failureCode = /^[a-z][a-z_]{0,100}$/.test(error?.message || '') ? error.message : 'fixture_operation_failed';
+    throw error;
+  } finally {
+    if (browser) await browser.close();
+    if (browserServer) await browserServer.close();
+    if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+    if (owned) {
+      const marker = await db.collection('_fixture_owner').findOne({ _id: identity });
+      check(marker?._id === identity && dbName.startsWith('sillage_interest_test_'), 'cleanup_database_ownership_mismatch');
+      await db.dropDatabase();
+    }
+    for (const connection of clients.reverse()) await connection.close();
+    clean = true;
+    fs.writeFileSync(path.join(reportDir, 'report.json'), JSON.stringify({ success, phase, failureCode, phases,
+      elapsed_ms: Date.now() - started, cleanup_complete: clean,
+      manifest_sha256: createHash('sha256').update(manifestBytes).digest('hex'),
+      scope: 'Built public UI, actual Node HTTP functions and isolated Mongo replica; readiness transport is synthetic; no hosted Vercel or paid traffic.' }, null, 2) + '\n');
+  }
+  check(success && clean, 'public_launch_incomplete');
+}
+
+if (require.main === module) main(process.argv.slice(2)).catch(() => {
+  process.stderr.write('Public launch acceptance failed; inspect the sanitized report phase.\n'); process.exitCode = 1;
+});
+module.exports = { main };

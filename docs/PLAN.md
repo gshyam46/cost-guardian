@@ -1,5 +1,11 @@
 # Sillage: implementation plan
 
+## Public frontend deployment and registration, 2026-09-14
+
+Follow ADR-52 and [PUBLIC_LAUNCH.md](PUBLIC_LAUNCH.md): independent Vercel public site, bounded workspace availability check, clear unavailable/coming-soon path, durable early-access records, operator export/deletion and actual outage/recovery verification. Preserve existing workspace authentication and runtime. Prepare the code and deployment configuration now; verify the external Vercel project and hosted database before claiming a live signup service.
+
+Implementation and local acceptance are complete: 380 frontend tests, 23 function/storage tests, six build-isolation tests and nine browser/Mongo phases pass. The next step is operator setup: authenticate the intended Vercel account/project, connect and bootstrap a dedicated hosted interest database, configure a real privacy contact and server environment, then verify the deployed public routes and one consented registration. No database or paid hosting plan was provisioned. [VALIDATION.md](VALIDATION.md) records exact scope and artifact evidence; account provisioning and broader product release gates remain open.
+
 ## Standards-based capture continuation, 2026-09-13
 
 [OPENTELEMETRY.md](OPENTELEMETRY.md) and ADR-51 defined the implementation before code: maintained OpenInference hooks → bounded numeric OTel processor → existing direct collector/worker → real grouped calls and parent references. This path is now implemented in 0.2.0 and passed independent installed-wheel tests, including existing-provider preservation, OpenAI 1.x/2.x, original Founder agent metadata, LangChain callbacks and native compatibility. The final delivery includes Sillage's landing page, frontend and documentation on `mvp2.0`; [VALIDATION.md](VALIDATION.md) records final build/browser evidence. Existing direct/native and Langfuse paths remain supported.

@@ -1,5 +1,9 @@
 # Sillage: decision register
 
+## ADR-52: independent public frontend and durable early-access registration, 2026-09-14
+
+Accepted implementation scope is recorded before code in [PUBLIC_LAUNCH.md](PUBLIC_LAUNCH.md): host the public experience and small availability/registration functions on Vercel while keeping workspace OIDC, monitoring intake and workers on their existing runtime. A backend outage must leave the landing/demo and contact-registration path usable. Early-access records require acknowledged independent storage and explicit contact consent; they do not create workspace accounts. Preserve the current self-hosted access flow. Hosted account/database configuration and actual deployment proof remain explicit prerequisites.
+
 ## ADR-51: reuse OpenInference and preserve OpenTelemetry context, 2026-09-13
 
 Accepted before implementation in [OPENTELEMETRY.md](OPENTELEMETRY.md). Use maintained Python instrumentors plus an in-process Sillage span processor that emits only supported LLM call measurements through the existing direct collector. Preserve real trace/span/parent IDs and supplied agent context; non-LLM framework spans cannot become charged/counted generations. Keep existing Langfuse and native paths compatible, preserve externally owned providers/exporters, and make content exclusion explicit. Ship a versioned wheel and visible onboarding choice with verified compatibility. A general OTLP receiver and full workflow-span store require subsequent contracts. The founder also authorised committing and pushing the completed integration, landing page, frontend and documentation to `mvp2.0`.
