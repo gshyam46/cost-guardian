@@ -1,5 +1,11 @@
 # Sillage: architecture
 
+## Cream/brick identity and registration confirmation, ADR-53
+
+The public and ordinary workspace builds share the same local typography, palette, original vector wake mark and named public brand assets. Font binaries compile into hashed static media; the backend snapshots only the fixed favicon/manifest/license filenames alongside manifest-listed assets, preserving file-size, traversal and immutable-snapshot boundaries. Container and CI build allowlists include these exact assets. [DESIGN_REFRESH.md](DESIGN_REFRESH.md) describes the visual contract.
+
+The revised signup presents a normal registration form with required name/email and optional details under disclosure. Only the registration API's exact HTTP 202 committed acknowledgment permits an in-memory success page and replacement of the visible URL with `/waitlist`. The URL carries no personal data or success flag, and the route itself confers no authority. Direct/reloaded waitlist entry remains neutral. Existing storage/consent semantics and workspace OIDC authentication are unchanged.
+
 ## Public frontend and independent registration, ADR-52, 2026-09-14
 
 The explicit Vercel public build serves the landing/demo, early-access form and privacy notice without mounting the workspace authentication lifecycle. Sign-in/onboarding call a same-origin Node availability function, which checks only the operator-configured HTTPS workspace's bounded `/api/ready` endpoint. Healthy readiness offers an explicit link to that workspace origin; missing configuration or failure keeps the visitor on the coming-soon/unavailable experience. Existing self-hosted builds retain their guarded routes, OIDC cookies and CSRF rules.

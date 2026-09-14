@@ -13,8 +13,8 @@ const NAV = [
 
 /** An API response is distinct from source freshness or worker health. */
 const ApiCheckIndicator = ({ refreshing, lastUpdated }) => !lastUpdated ? null : (
-  <div className="flex items-center gap-2 text-xs text-slate-500" title="Last dashboard API response; source freshness is shown with the data">
-    <span className={`h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400 ${refreshing ? 'animate-pulse' : ''}`} />
+  <div className="flex items-center gap-2 text-xs text-ink-500" title="Last dashboard API response; source freshness is shown with the data">
+    <span className={`h-1.5 w-1.5 shrink-0 rounded-full bg-ink-400 ${refreshing ? 'animate-pulse' : ''}`} />
     <span>API checked &middot; {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
   </div>
 );
@@ -26,8 +26,8 @@ export default function GuardianLayout({ children, refreshing, lastUpdated }) {
   const page = NAV.find(isActive)?.label || 'Investigation';
   return <div className="cg-product">
     <aside className="cg-sidebar">
-      <a href="/welcome" className="cg-sidebar-brand" aria-label="Product home"><GuardianWordmark light /></a>
-      <div className="cg-mobile-brand"><a href="/welcome"><GuardianWordmark light /></a></div>
+      <a href="/welcome" className="cg-sidebar-brand" aria-label="Product home"><GuardianWordmark /></a>
+      <div className="cg-mobile-brand"><a href="/welcome"><GuardianWordmark /></a></div>
       <div className="cg-workspace"><span className="cg-eyebrow">WORKSPACE</span><strong>{access.project?.name || 'Your workspace'}</strong><span>{access.project?.environment || 'Application monitoring'}</span>{access.project && <small>Organization: {access.project.organization_id}</small>}</div>
       <nav aria-label="Sillage">{NAV.map(item => { const Icon = item.icon; return <Link key={item.to} to={item.to} aria-current={isActive(item) ? 'page' : undefined} className={isActive(item) ? 'active' : ''}><Icon size={17} />{item.label}</Link>; })}</nav>
       <div className="cg-sidebar-footer"><a href="/demo"><span>Explore sample workspace</span><ArrowUpRight size={15} /></a><p>Get familiar with a trace before connecting your app.</p>{access.actor && <div className="cg-account"><span className="cg-avatar" aria-hidden="true">{access.actor.name?.slice(0, 1) || 'W'}</span><span><strong>{access.actor.name}</strong><small>{access.actor.role}</small></span></div>}</div>

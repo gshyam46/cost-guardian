@@ -12,9 +12,9 @@ import { policyExplanation } from '@/lib/policyModel';
 import IncidentDeliveries from './IncidentDeliveries';
 
 const SEVERITY_STYLES = {
-  high: 'bg-red-100 text-red-700',
-  medium: 'bg-amber-100 text-amber-700',
-  low: 'bg-slate-100 text-slate-700',
+  high: 'bg-danger-100 text-danger-700',
+  medium: 'bg-ochre-100 text-ochre-700',
+  low: 'bg-ink-100 text-ink-700',
 };
 
 const GuardianIncidentDetail = () => {
@@ -81,7 +81,7 @@ const GuardianIncidentDetail = () => {
   if (!currentResult || result.loading) {
     return (
       <GuardianLayout>
-        <div role="status" className="animate-pulse text-slate-600">Loading incident...</div>
+        <div role="status" className="animate-pulse text-ink-600">Loading incident...</div>
       </GuardianLayout>
     );
   }
@@ -90,7 +90,7 @@ const GuardianIncidentDetail = () => {
     <Button variant="ghost" size="sm" onClick={() => navigate('/incidents')} className="mb-4">Back to incidents</Button>
     <Card><CardContent className="py-6">
       <h2 className="text-lg font-semibold mb-2">{result.error === 404 ? 'Incident not found' : result.error === 403 ? 'Access denied' : 'Could not load incident'}</h2>
-      <p role="alert" className="text-sm text-slate-600">
+      <p role="alert" className="text-sm text-ink-600">
         {result.error === 404 ? 'The requested incident was not found.'
           : result.error === 403 ? 'Access to this incident was denied. Check with your Sillage operator.'
           : result.error === 401 ? 'Access was rejected. Connect again to continue.'
@@ -106,7 +106,7 @@ const GuardianIncidentDetail = () => {
         <ArrowLeft className="h-4 w-4 mr-1" />
         Back to incidents
       </Button>
-      {resolveError && <p role="alert" className="text-sm text-amber-900 mb-4">{resolveError}</p>}
+      {resolveError && <p role="alert" className="text-sm text-ochre-900 mb-4">{resolveError}</p>}
 
       <div className="flex flex-col sm:flex-row items-start justify-between gap-3 mb-6">
         <div className="min-w-0">
@@ -117,8 +117,8 @@ const GuardianIncidentDetail = () => {
             <Badge variant="outline">{incident.detector}</Badge>
             <Badge variant="outline">{incident.status}</Badge>
           </div>
-          <h2 className="text-xl font-semibold text-slate-900">{incident.title}</h2>
-          <p className="text-sm text-slate-500 mt-1">{incident.summary}</p>
+          <h2 className="cg-page-title text-xl font-semibold text-ink-900">{incident.title}</h2>
+          <p className="text-sm text-ink-500 mt-1">{incident.summary}</p>
         </div>
         {incident.status === 'open' && canResolve && (
           <Button className="shrink-0" onClick={handleResolve} disabled={resolving}>
@@ -134,15 +134,15 @@ const GuardianIncidentDetail = () => {
             <CardTitle className="text-base">Evidence</CardTitle>
           </CardHeader>
           <CardContent>
-            {explanation && <div className="mb-4 rounded border border-slate-200 bg-slate-50 p-3" aria-label="Monitoring rule evidence">
-              <p className="font-medium text-slate-900">{explanation}</p>
-              <p className="mt-2 text-xs text-slate-600">Evaluated with saved policy revision {incident.evidence.policy_revision}. Later rule changes do not change this evidence.</p>
+            {explanation && <div className="mb-4 rounded border border-ink-200 bg-ink-50 p-3" aria-label="Monitoring rule evidence">
+              <p className="font-medium text-ink-900">{explanation}</p>
+              <p className="mt-2 text-xs text-ink-600">Evaluated with saved policy revision {incident.evidence.policy_revision}. Later rule changes do not change this evidence.</p>
             </div>}
-            <p className="text-xs text-slate-400 mb-2">
+            <p className="text-xs text-ink-400 mb-2">
               The exact values that triggered this incident — check these against the raw
               trace, don't just trust the verdict.
             </p>
-            <pre className="bg-slate-50 border rounded-md p-3 text-xs overflow-x-auto">
+            <pre className="bg-ink-50 border rounded-md p-3 text-xs overflow-x-auto">
               {JSON.stringify(incident.evidence, null, 2)}
             </pre>
           </CardContent>
@@ -154,25 +154,25 @@ const GuardianIncidentDetail = () => {
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="flex justify-between">
-              <span className="text-slate-500">Agent</span>
-              <span className="font-medium text-slate-900">{incident.agent_name || '—'}</span>
+              <span className="text-ink-500">Agent</span>
+              <span className="font-medium text-ink-900">{incident.agent_name || '—'}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Created</span>
-              <span className="font-medium text-slate-900">
+              <span className="text-ink-500">Created</span>
+              <span className="font-medium text-ink-900">
                 {new Date(incident.created_at).toLocaleString()}
               </span>
             </div>
             {incident.resolved_at && (
               <div className="flex justify-between">
-                <span className="text-slate-500">Resolved</span>
-                <span className="font-medium text-slate-900">
+                <span className="text-ink-500">Resolved</span>
+                <span className="font-medium text-ink-900">
                   {new Date(incident.resolved_at).toLocaleString()}
                 </span>
               </div>
             )}
             <div>
-              <span className="text-slate-500 block mb-2">Trace</span>
+              <span className="text-ink-500 block mb-2">Trace</span>
               {incident.trace_urls && incident.trace_urls.length > 0 ? (
                 <div className="space-y-1">
                   {incident.trace_urls.map((url) => (
@@ -181,14 +181,14 @@ const GuardianIncidentDetail = () => {
                       href={url}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                      className="flex items-center gap-1 text-sm text-brick-600 hover:underline"
                     >
                       View in Langfuse <ExternalLink className="h-3 w-3" />
                     </a>
                   ))}
                 </div>
               ) : (
-                <div className="text-xs text-slate-500 space-y-2">
+                <div className="text-xs text-ink-500 space-y-2">
                   <p>No external trace link is available.</p>
                   {(incident.trace_ids || []).map((id) => <Link key={id} className="block underline break-all" to={`/runs/${encodeURIComponent(id)}`}>Inspect captured run {id}</Link>)}
                 </div>

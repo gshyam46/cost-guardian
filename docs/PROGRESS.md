@@ -1,5 +1,15 @@
 # Sillage: current progress
 
+## Current continuation: cream and brick product design, 2026-09-15
+
+ADR-53 and [DESIGN_REFRESH.md](DESIGN_REFRESH.md) preceded code. The landing/demo now centres on a substantial interactive investigation, with a compact workflow and evidence explanation. The complete Sillage workspace and public access journey share cream paper, brick actions, brown ink, locally hosted Instrument Serif/Manrope and an original wake mark. Favicon, touch icon, manifest colors, charts, sidebar, forms, empty/error states and notifications follow the same system.
+
+The public flow uses **Sign up / Sign in / Register**, with optional company/project details collapsed. A successful committed registration clears the form and shows the dedicated waitlist page; direct visits and reloads remain neutral. Failed writes preserve the retryable form. Existing consent, storage, retention and private workspace authentication contracts remain intact.
+
+Both isolated builds passed with matching fonts/assets. Verification passed 396 frontend tests, 29 public server/build tests, 53 backend static tests (one platform skip), 69 workspace browser scenarios, ten actual public browser/Mongo phases and all eight native deployment phases. Small mobile and desktop screenshots were inspected. The native browser harness now retains journey outcomes and precise cleanup diagnostics after an earlier cleanup failure; the complete rerun passed. [VALIDATION.md](VALIDATION.md) records the evidence.
+
+Local previews are running at `http://127.0.0.1:3004` (public site/signup, separate local database) and `http://127.0.0.1:8001/welcome` (existing workspace and preserved data). The local public build contains a synthetic privacy contact. Hosted Vercel, a dedicated hosted interest database, real privacy contact and actual deployed acceptance remain pending. Registration does not yet create authenticated accounts or managed workspaces.
+
 ## Current continuation: public Vercel frontend, 2026-09-14
 
 ADR-52 and [PUBLIC_LAUNCH.md](PUBLIC_LAUNCH.md) preceded implementation. Public-mode landing/demo/signup/privacy routes and responsive access pages now work independently of workspace authentication. Sign-in/onboarding checks readiness with a deadline, shows coming-soon/currently-unavailable feedback and offers a workspace link only when ready. The independent registration function records consented, unverified early-access interest in a separate Mongo store; it never claims success before commit. Duplicate protection, transactional rate limits, expiry, private CSV export and exact-contact deletion are implemented.

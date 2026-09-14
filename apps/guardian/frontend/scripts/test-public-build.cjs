@@ -38,7 +38,7 @@ test('Vercel routes only public pages to HTML and preserves independent function
   assert.equal(config.buildCommand, 'npm run build:public');
   assert.equal(config.outputDirectory, 'build');
   assert.deepEqual(config.rewrites.map((rule) => rule.source),
-    ['/', '/welcome', '/demo', '/signup', '/privacy', '/signin', '/setup']);
+    ['/', '/welcome', '/demo', '/signup', '/waitlist', '/privacy', '/signin', '/setup']);
   assert.ok(config.rewrites.every((rule) => rule.destination === '/index.html'));
   assert.deepEqual(Object.keys(config.functions).sort(), ['api/availability.js', 'api/interest.js']);
   assert.equal(config.headers[0].source, '/api/:path*');

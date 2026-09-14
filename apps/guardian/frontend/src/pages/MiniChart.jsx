@@ -8,12 +8,12 @@
  */
 
 const EmptyState = ({ label }) => (
-  <div className="h-24 flex items-center justify-center text-xs text-slate-400">
+  <div className="h-24 flex items-center justify-center text-xs text-ink-400">
     No {label} data yet
   </div>
 );
 
-export const LineChart = ({ points, label, formatValue = (v) => v, color = '#0f172a' }) => {
+export const LineChart = ({ points, label, formatValue = (v) => v, color = 'var(--sillage-ink)' }) => {
   if (!points || points.length === 0) return <EmptyState label={label} />;
 
   const width = 480;
@@ -45,9 +45,9 @@ export const LineChart = ({ points, label, formatValue = (v) => v, color = '#0f1
           <circle key={c.label} cx={c.x} cy={c.y} r="2.5" fill={color} />
         ))}
       </svg>
-      <div className="flex justify-between text-xs text-slate-500 mt-1">
+      <div className="flex justify-between text-xs text-ink-500 mt-1">
         <span>{formatValue(min)}</span>
-        <span className="text-slate-400">
+        <span className="text-ink-400">
           {points[0].label} → {points[points.length - 1].label}
         </span>
         <span>{formatValue(max)}</span>
@@ -68,15 +68,15 @@ export const BarChart = ({ points, label }) => {
         {points.map((point) => (
           <div key={point.label} className="flex-1 flex flex-col justify-end" title={`${point.label}: ${point.value}`}>
             <div
-              className="bg-slate-800 rounded-sm min-h-[2px]"
+              className="bg-ink-800 rounded-sm min-h-[2px]"
               style={{ height: `${(point.value / scale) * 100}%` }}
             />
           </div>
         ))}
       </div>
-      <div className="flex justify-between text-xs text-slate-500 mt-1">
+      <div className="flex justify-between text-xs text-ink-500 mt-1">
         <span>{points[0].label}</span>
-        <span className="text-slate-400">peak {peak}</span>
+        <span className="text-ink-400">peak {peak}</span>
         <span>{points[points.length - 1].label}</span>
       </div>
     </div>

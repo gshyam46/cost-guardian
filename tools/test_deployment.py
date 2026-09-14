@@ -294,8 +294,9 @@ def run_suite(args, report_dir):
             repeat = {**browser_config, "phase": "restart", "trace_id": first["trace_id"], "incident_id": first["incident_id"]}
             browser = register(Child([args.node, str(FIXTURES / "browser.cjs"), "--run"], repeat, cwd=ROOT))
             second = browser.result(90)
-            check(second.get("status") == "passed" and browser.process.returncode == 0, "browser_restart_" + str(second.get("phase", "failed")))
             result["restart_journey"] = second
+            if second.get("status") != "passed": result["browser_failure"] = second
+            check(second.get("status") == "passed" and browser.process.returncode == 0, "browser_restart_" + str(second.get("phase", "failed")))
             step("controlled_api_worker_restart_preserves_accounting_and_resolution")
             proxy.cut()
             await_ready(origin, api, expected=503, seconds=15)

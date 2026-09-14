@@ -64,26 +64,20 @@ function PublicFrame({ children }) {
   return <div className="sillage-public-access">
     <header className="sillage-access-header">
       <a href="/welcome" aria-label="Sillage home"><GuardianWordmark /></a>
-      <nav aria-label="Public navigation"><a href="/demo">Explore the demo</a><a href="/signin">Sign in</a></nav>
+      <nav aria-label="Public navigation"><a href="/demo">Demo</a><a href="/signin">Sign in</a><a className="sillage-access-nav-signup" href="/signup">Sign up <ArrowRight size={14} /></a></nav>
     </header>
     {children}
-    <footer className="sillage-access-footer"><span>Understand what passed through.</span><a href="/privacy">Privacy &amp; your details</a></footer>
+    <footer className="sillage-access-footer"><span>Understanding what passed through.</span><a href="/privacy">Privacy &amp; your details</a></footer>
   </div>;
 }
 
-export default function PublicAccess({ intent = 'signin' }) {
-  const source = ['signup', 'signin', 'onboarding'].includes(intent) ? intent : 'signin';
-  const [access, setAccess] = useState({ state: source === 'signup' ? 'signup' : 'checking', origin: null });
-  const [fields, setFields] = useState({ ...INITIAL_FIELDS });
-  const [submission, setSubmission] = useState({ state: 'idle', message: '' });
+function useWorkspaceAvailability(enabled = true) {
+  const [access, setAccess] = useState({ state: enabled ? 'checking' : 'idle', origin: null });
   const availabilityRequest = useRef(null);
-  const interestRequest = useRef(null);
-  const formRef = useRef(null);
-
   const checkAccess = useCallback(async () => {
     stopRequest(availabilityRequest);
-    if (source === 'signup') {
-      setAccess({ state: 'signup', origin: null });
+    if (!enabled) {
+      setAccess({ state: 'idle', origin: null });
       return;
     }
     const request = { controller: new AbortController(), timer: null };
@@ -106,14 +100,28 @@ export default function PublicAccess({ intent = 'signin' }) {
     } finally {
       if (availabilityRequest.current === request) stopRequest(availabilityRequest);
     }
-  }, [source]);
+  }, [enabled]);
+  useEffect(() => {
+    checkAccess();
+    return () => stopRequest(availabilityRequest);
+  }, [checkAccess]);
+  return { access, checkAccess };
+}
+
+export default function PublicAccess({ intent = 'signin' }) {
+  const source = ['signup', 'signin', 'onboarding'].includes(intent) ? intent : 'signin';
+  const [fields, setFields] = useState({ ...INITIAL_FIELDS });
+  const [submission, setSubmission] = useState({ state: 'idle', message: '' });
+  const { access, checkAccess } = useWorkspaceAvailability(source !== 'signup' && submission.state !== 'saved');
+  const interestRequest = useRef(null);
+  const formRef = useRef(null);
+  const optionalDetails = useRef(null);
 
   useEffect(() => {
     setFields({ ...INITIAL_FIELDS });
     setSubmission({ state: 'idle', message: '' });
-    checkAccess();
-    return () => { stopRequest(availabilityRequest); stopRequest(interestRequest); };
-  }, [checkAccess]);
+    return () => stopRequest(interestRequest);
+  }, [source]);
 
   const update = event => {
     const { name, type, value, checked } = event.target;
@@ -121,6 +129,7 @@ export default function PublicAccess({ intent = 'signin' }) {
   };
   const invalid = (message, field) => {
     setSubmission({ state: 'error', message });
+    if (['company', 'use_case'].includes(field) && optionalDetails.current) optionalDetails.current.open = true;
     formRef.current?.elements.namedItem(field)?.focus();
   };
   const submit = async event => {
@@ -166,6 +175,9 @@ export default function PublicAccess({ intent = 'signin' }) {
       if (interestRequest.current === request) {
         setFields({ ...INITIAL_FIELDS });
         setSubmission({ state: 'saved', message: '' });
+        // The confirmation lives only in this mounted component. Reloading the
+        // public route cannot reconstruct a successful registration from a URL.
+        try { window.history.replaceState(null, '', '/waitlist'); } catch { /* The acknowledged registration remains true. */ }
       }
     } catch (_) {
       if (interestRequest.current === request) setSubmission({ state: 'error',
@@ -175,58 +187,87 @@ export default function PublicAccess({ intent = 'signin' }) {
     }
   };
 
-  const title = access.state === 'signup' ? 'Get early access to Sillage.'
+  if (submission.state === 'saved') return <WaitlistPage confirmed />;
+  const title = source === 'signup' ? 'A clearer view of your AI.'
     : access.state === 'checking' ? 'Checking workspace access…'
       : access.state === 'ready' ? 'Your workspace is ready.'
-        : access.state === 'coming_soon' ? 'Early access is coming soon' : 'Currently unavailable';
+        : access.state === 'coming_soon' ? 'Sign-in is coming soon' : 'Currently unavailable';
   return <PublicFrame><main className="sillage-access-main">
     <section className="sillage-access-story" aria-labelledby="public-access-title">
-      <p className="sillage-access-eyebrow">FOLLOW THE WORK. UNDERSTAND THE WAKE.</p>
+      <p className="sillage-access-eyebrow">THE WORK BEHIND THE ANSWER</p>
       <div aria-live="polite" aria-atomic="true"><h1 id="public-access-title">{title}</h1>
-        <p>{access.state === 'signup' ? 'See what your AI application is doing, and find the calls that need attention.'
-          : access.state === 'checking' ? 'You can explore Sillage or register your interest while we check.'
+        <p>{source === 'signup' ? 'Follow the calls. Find the slow step. Understand the cost of an answer.'
+          : access.state === 'checking' ? 'You can explore the demo or register while we check.'
             : access.state === 'ready' ? 'Continue to your workspace to sign in and connect your application.'
-              : 'Thanks for your interest in Sillage. Leave your details and we’ll keep you updated about access.'}</p></div>
+              : 'Thanks for your interest in Sillage. Register below and we’ll keep you updated about access.'}</p></div>
       <div className="sillage-access-actions">
         {access.state === 'ready' && <a className="sillage-access-primary" referrerPolicy="no-referrer"
           href={`${access.origin}/${source === 'onboarding' ? 'setup' : 'signin'}`}>
-          {source === 'onboarding' ? 'Connect your application' : 'Sign in to your workspace'}<ArrowRight size={16} /></a>}
+          {source === 'onboarding' ? 'Sign in and connect' : 'Sign in to your workspace'}<ArrowRight size={16} /></a>}
         {['unavailable', 'coming_soon'].includes(access.state) && <button className="sillage-access-secondary" onClick={checkAccess}>
           <RefreshCw size={15} /> Retry access</button>}
         <a className="sillage-access-demo" href="/demo">Explore the interactive demo <ArrowRight size={15} /></a>
       </div>
-      <div className="sillage-access-promise"><span aria-hidden="true">01 — A clearer view</span>
-        <p>Follow model calls, understand usage and investigate reported failures.</p></div>
+      <div className="sillage-access-promise"><span>Sillage / noun</span>
+        <p>Understanding what passed through<br />by the wake it leaves.</p></div>
     </section>
     <section className="sillage-interest-panel" aria-labelledby="interest-title">
-      {submission.state === 'saved' ? <div className="sillage-interest-success" role="status">
-        <span className="sillage-interest-check" aria-hidden="true"><Check size={24} /></span>
-        <p className="sillage-access-eyebrow">THANK YOU FOR YOUR INTEREST</p><h2 id="interest-title">Interest registered</h2>
-        <p>Your details have been saved for early-access updates. This does not create an account.</p>
-        <a href="/demo" className="sillage-access-primary">Explore Sillage <ArrowRight size={16} /></a>
-        <a href="/privacy" className="sillage-interest-privacy">How we use your details</a>
-      </div> : <><p className="sillage-access-eyebrow">EARLY ACCESS</p><h2 id="interest-title">A place for your team.</h2>
-        <p className="sillage-interest-intro">Tell us a little about yourself. We’ll contact you about access.</p>
-        <form ref={formRef} onSubmit={submit} noValidate aria-label="Register early-access interest">
+      <p className="sillage-access-eyebrow">SIGN UP</p><h2 id="interest-title">Register with Sillage.</h2>
+        <p className="sillage-interest-intro">A name, an email, a place to start.</p>
+        <form ref={formRef} onSubmit={submit} noValidate aria-label="Register with Sillage">
           <fieldset disabled={submission.state === 'saving'}><legend className="sillage-visually-hidden">Your registration details</legend>
             <div className="sillage-interest-field"><label htmlFor="interest-name">Your name <span>(required)</span></label>
               <input id="interest-name" name="name" value={fields.name} onChange={update} autoComplete="name" maxLength={100} required /></div>
             <div className="sillage-interest-field"><label htmlFor="interest-email">Email <span>(required)</span></label>
               <input id="interest-email" name="email" type="email" value={fields.email} onChange={update} autoComplete="email" maxLength={254} required /></div>
+            <details ref={optionalDetails} className="sillage-interest-optional"><summary>Add company or project details <span>(optional)</span></summary>
             <div className="sillage-interest-field"><label htmlFor="interest-company">Company <span>(optional)</span></label>
               <input id="interest-company" name="company" value={fields.company} onChange={update} autoComplete="organization" maxLength={120} /></div>
             <div className="sillage-interest-field"><label htmlFor="interest-use-case">What are you building? <span>(optional)</span></label>
               <textarea id="interest-use-case" name="use_case" value={fields.use_case} onChange={update} maxLength={1200} rows={3}
-                aria-describedby="interest-use-case-note" /><small id="interest-use-case-note">A short description is enough. Please leave out private customer information.</small></div>
+                aria-describedby="interest-use-case-note" /><small id="interest-use-case-note">A short description is enough. Please leave out private customer information.</small></div></details>
             <div className="sillage-interest-consent"><input id="interest-consent" name="consent" type="checkbox" checked={fields.consent} onChange={update} required />
               <label htmlFor="interest-consent">{CONSENT} <a href="/privacy">Read the privacy notice.</a></label></div>
-            <button type="submit" className="sillage-access-primary">{submission.state === 'saving' ? 'Saving…' : 'Register interest'}<ArrowRight size={16} /></button>
+            <button type="submit" className="sillage-access-primary">{submission.state === 'saving' ? 'Saving…' : 'Register'}<ArrowRight size={16} /></button>
           </fieldset>
           {submission.state === 'error' && <p className="sillage-interest-error" role="alert">{submission.message}</p>}
-          {submission.state === 'saving' && <p className="sillage-interest-progress" role="status">Saving your interest…</p>}
-          <p className="sillage-interest-note">Early-access registration does not create a workspace or sign you in.</p>
+          {submission.state === 'saving' && <p className="sillage-interest-progress" role="status">Saving your registration…</p>}
+          <p className="sillage-interest-note">Registration saves your contact details. Workspace sign-in is separate.</p>
         </form>
-      </>}
+    </section>
+  </main></PublicFrame>;
+}
+
+export function WaitlistPage({ confirmed = false }) {
+  const { access, checkAccess } = useWorkspaceAvailability();
+  const heading = useRef(null);
+  useEffect(() => { heading.current?.focus(); }, [confirmed]);
+  return <PublicFrame><main className="sillage-waitlist-main" aria-labelledby="waitlist-title">
+    <section className="sillage-waitlist-confirmation">
+      {confirmed && <span className="sillage-interest-check" aria-hidden="true"><Check size={22} /></span>}
+      <p className="sillage-access-eyebrow">{confirmed ? 'REGISTRATION RECEIVED' : 'YOUR NEXT STEP'}</p>
+      <h1 id="waitlist-title" ref={heading} tabIndex={-1}>{confirmed ? 'You’re on the list.' : 'Find your way into Sillage.'}</h1>
+      <p className="sillage-waitlist-description" role="status">{confirmed
+        ? 'We’ve received your registration. We’ll contact you about access using the details you provided.'
+        : 'This page cannot confirm a registration. Register to join the list, or check whether you can sign in.'}</p>
+      {confirmed && <p className="sillage-waitlist-note">This does not create an account or sign you in.</p>}
+    </section>
+    <section className="sillage-waitlist-next" aria-labelledby="waitlist-next-title" aria-live="polite">
+      <p className="sillage-access-eyebrow">WHAT HAPPENS NEXT</p>
+      <h2 id="waitlist-next-title">{access.state === 'checking' ? 'Checking workspace availability…'
+        : access.state === 'ready' ? 'Already have workspace access?'
+          : access.state === 'coming_soon' ? 'Workspace access is coming soon.' : 'Workspace sign-in is currently unavailable.'}</h2>
+      <p>{access.state === 'ready' ? 'If you’ve already been given access, continue to your workspace to sign in.'
+        : access.state === 'checking' ? 'You can explore the product while we check.'
+          : confirmed ? 'Your registration is recorded. Explore the demo while you wait for access.'
+            : 'You can register or explore the demo while workspace access is unavailable.'}</p>
+      <div className="sillage-waitlist-actions">
+        {!confirmed && <a href="/signup" className="sillage-access-primary">Sign up <ArrowRight size={16} /></a>}
+        {access.state === 'ready' && <a className={confirmed ? 'sillage-access-primary' : 'sillage-access-secondary'}
+          referrerPolicy="no-referrer" href={`${access.origin}/signin`}>Sign in <ArrowRight size={16} /></a>}
+        <a href="/demo" className={confirmed && access.state !== 'ready' ? 'sillage-access-primary' : 'sillage-access-secondary'}>Explore the demo <ArrowRight size={16} /></a>
+        {['coming_soon', 'unavailable'].includes(access.state) && <button className="sillage-waitlist-retry" onClick={checkAccess}><RefreshCw size={14} /> Check availability again</button>}
+      </div>
     </section>
   </main></PublicFrame>;
 }
@@ -235,7 +276,7 @@ export function PrivacyNotice() {
   const candidate = process.env.REACT_APP_PRIVACY_CONTACT_EMAIL || '';
   const contact = candidate.trim() === candidate && validEmail(candidate) ? candidate : null;
   return <PublicFrame><main className="sillage-privacy-main">
-    <p className="sillage-access-eyebrow">YOUR DETAILS, WITH A CLEAR PURPOSE</p><h1>Early-access privacy notice</h1>
+    <p className="sillage-access-eyebrow">YOUR DETAILS, WITH A CLEAR PURPOSE</p><h1>Registration &amp; privacy.</h1>
     <p>When you register interest in Sillage, we collect your name, email address, any company or project description you choose to share, and your permission to contact you.</p>
     <h2>Why we collect it</h2><p>We use these details to understand interest and contact you about early access. Registration is an unverified expression of interest; it does not create an account. Registering does not send an automated email.</p>
     <h2>Where it is kept</h2><p>The public site runs on Vercel. Registration details are saved in the MongoDB service configured by the Sillage operator. This form does not collect passwords, provider keys or application telemetry.</p>
@@ -245,6 +286,6 @@ export function PrivacyNotice() {
     <h2>Change your mind</h2><p>You can ask the Sillage operator to delete your details or stop contacting you.
       {contact ? <> Email <a href={`mailto:${encodeURIComponent(contact)}`}>{contact}</a>.</>
         : <> Contact the Sillage operator through the channel where you received this invitation.</>}</p>
-    <a className="sillage-access-secondary" href="/signup">Back to early access <ArrowRight size={15} /></a>
+    <a className="sillage-access-secondary" href="/signup">Back to sign up <ArrowRight size={15} /></a>
   </main></PublicFrame>;
 }

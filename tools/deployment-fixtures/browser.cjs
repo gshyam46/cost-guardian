@@ -18,6 +18,7 @@ async function bounded(promise, ms) {
 }
 (async () => {
   let server, browser, context, page, reportDir, phase = 'configuration', result, clean = false;
+  let contextClosed = false, browserDisconnected = false, serverClosed = false;
   try {
     const config = JSON.parse(fs.readFileSync(0, 'utf8'));
     reportDir = config.report_dir;
@@ -29,10 +30,13 @@ async function bounded(promise, ms) {
     const { chromium } = require(config.playwright);
     phase = 'browser_launch';
     server = await chromium.launchServer({ ...(process.platform === 'win32' ? { channel: 'msedge' } : {}), headless: true });
+    server.on('close', () => { serverClosed = true; });
     phase = 'browser_connect';
     browser = await chromium.connect(server.wsEndpoint());
+    browser.on('disconnected', () => { browserDisconnected = true; });
     phase = 'browser_context';
     context = await browser.newContext({ viewport: { width: 1280, height: 960 }, serviceWorkers: 'block', acceptDownloads: true });
+    context.on('close', () => { contextClosed = true; });
     const blocked = [], errors = [], publicApiRequests = [];
     let exploringPublic = config.phase === 'first';
     context.on('request', request => {
@@ -51,7 +55,8 @@ async function bounded(promise, ms) {
     if (config.phase === 'first') {
       phase = 'public_landing_and_interactive_demo';
       await page.goto(config.origin + '/welcome');
-      await page.getByRole('heading', { name: 'See what your AI is doing.', exact: true }).waitFor();
+      await page.getByRole('heading', { name: 'See the calls behind the answer.', exact: true }).waitFor();
+      await page.evaluate(() => document.fonts.ready);
       check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'landing_desktop_overflow');
       await page.screenshot({ path: path.join(config.report_dir, 'public-landing-desktop.png'), fullPage: true });
       await page.setViewportSize({ width: 390, height: 844 });
@@ -88,7 +93,7 @@ async function bounded(promise, ms) {
       exploringPublic = false;
       // Opening the public product must not create an authenticated session.
       check((await context.request.get(config.origin + '/api/guardian/access')).status() === 401, 'demo_created_private_access');
-      await page.getByRole('link', { name: 'Connect your app', exact: true }).first().click();
+      await page.getByRole('link', { name: 'Start tracking', exact: true }).first().click();
       await page.waitForURL(config.origin + '/setup');
     } else {
       await page.goto(config.origin + '/setup');
@@ -213,7 +218,7 @@ async function bounded(promise, ms) {
       await page.getByText('Sample workspace', { exact: true }).first().waitFor();
       check(!publicApiRequests.length, 'connected_demo_requested_private_api');
       exploringPublic = false;
-      await page.getByRole('link', { name: 'Connect your app', exact: true }).first().click();
+      await page.getByRole('link', { name: 'Start tracking', exact: true }).first().click();
       await page.waitForURL(config.origin + '/setup');
       await page.getByRole('heading', { name: 'Send events directly', exact: true }).waitFor();
       phase = 'owner_key_and_test_receipt';
@@ -349,18 +354,58 @@ async function bounded(promise, ms) {
       } catch { /* Diagnostics must not obscure the original failed phase. */ }
     }
   } finally {
-    try {
-      if (context) await bounded(context.close(), 10000);
-      if (browser) await bounded(browser.close(), 10000);
-      if (server) await bounded(server.close(), 10000);
-      clean = true;
-    } catch {
-      const owned = server?.process();
-      if (owned && owned.exitCode === null) {
-        if (process.platform === 'win32') spawnSync(path.join(process.env.SYSTEMROOT, 'System32', 'taskkill.exe'), ['/PID', String(owned.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore', timeout: 5000 });
-        else { try { await bounded(server.kill(), 5000); } catch {} }
+    const journey = { status: result?.status || 'failed', phase: result?.phase || phase };
+    if (result?.code) journey.code = result.code;
+    const cleanupSteps = [];
+    const safeName = error => ['Error', 'TimeoutError', 'TargetClosedError', 'AbortError', 'TypeError', 'ReferenceError', 'RangeError'].includes(error?.name) ? error.name : 'OtherError';
+    const owned = server?.process();
+    const processExited = () => !owned || owned.exitCode !== null || owned.signalCode !== null;
+    const closeResource = async (name, resource, close, confirmed) => {
+      if (!resource) return;
+      const started = Date.now();
+      if (confirmed()) { cleanupSteps.push({ stage: name, outcome: 'already_closed_confirmed', elapsed_ms: 0 }); return; }
+      try {
+        await bounded(close(), 10000);
+        cleanupSteps.push({ stage: name, outcome: 'closed', elapsed_ms: Date.now() - started });
+      } catch (error) {
+        // Only a closed-target error with an observed closure is harmless. A
+        // timeout or other unknown error remains a failed check, even after reaping.
+        const closedTarget = error?.name === 'TargetClosedError' && confirmed();
+        cleanupSteps.push({ stage: name, outcome: closedTarget ? 'already_closed_confirmed' : 'failed',
+          error_name: safeName(error), deadline_exceeded: error?.message === 'cleanup_timeout', elapsed_ms: Date.now() - started });
       }
-      result = { status: 'failed', phase: 'cleanup', code: 'browser_cleanup_timeout' };
+    };
+    // Attempt every resource independently so one failed context close cannot skip
+    // closing the websocket or the exact owned browser process.
+    await closeResource('context', context, () => context.close(), () => contextClosed);
+    await closeResource('browser_connection', browser, () => browser.close(), () => browserDisconnected);
+    await closeResource('browser_server', server, () => server.close(), () => serverClosed && processExited());
+    if (owned && !processExited()) {
+      const started = Date.now();
+      try {
+        if (process.platform === 'win32') {
+          const killed = spawnSync(path.join(process.env.SYSTEMROOT, 'System32', 'taskkill.exe'), ['/PID', String(owned.pid), '/T', '/F'],
+            { windowsHide: true, stdio: 'ignore', timeout: 5000 });
+          check(!killed.error && killed.status === 0, 'owned_browser_termination_failed');
+          if (!processExited()) await bounded(new Promise(resolve => owned.once('exit', resolve)), 5000);
+        } else await bounded(server.kill(), 5000);
+        check(processExited(), 'owned_browser_exit_unconfirmed');
+        cleanupSteps.push({ stage: 'owned_process_fallback', outcome: 'terminated', elapsed_ms: Date.now() - started });
+      } catch (error) {
+        cleanupSteps.push({ stage: 'owned_process_fallback', outcome: 'failed', error_name: safeName(error),
+          deadline_exceeded: error?.message === 'cleanup_timeout', elapsed_ms: Date.now() - started });
+      }
+    }
+    clean = processExited() && (!browser || browserDisconnected) && (!context || contextClosed);
+    const cleanupFailed = !clean || cleanupSteps.some(step => step.outcome === 'failed');
+    result = { ...result, journey_outcome: journey,
+      cleanup: { status: cleanupFailed ? 'failed' : 'passed', stages: cleanupSteps,
+        context_closed: contextClosed, browser_disconnected: browserDisconnected,
+        server_closed: serverClosed, owned_process_exited: processExited() } };
+    if (cleanupFailed) {
+      result.status = 'failed';
+      // Preserve an actual journey failure; cleanup must not replace its cause.
+      if (journey.status === 'passed') { result.phase = 'cleanup'; result.code = 'browser_cleanup_failed'; }
     }
     result.cleanup_complete = clean;
     console.log(JSON.stringify(result));

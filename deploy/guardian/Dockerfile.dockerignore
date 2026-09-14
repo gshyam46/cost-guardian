@@ -49,11 +49,18 @@
 !apps/guardian/frontend/tailwind.config.js
 !apps/guardian/frontend/public/
 !apps/guardian/frontend/public/index.html
+!apps/guardian/frontend/public/favicon.svg
+!apps/guardian/frontend/public/favicon.ico
+!apps/guardian/frontend/public/apple-touch-icon.png
+!apps/guardian/frontend/public/manifest.json
+!apps/guardian/frontend/public/InstrumentSerif-OFL.txt
+!apps/guardian/frontend/public/Manrope-OFL.txt
 !apps/guardian/frontend/src/
 !apps/guardian/frontend/src/**/
 !apps/guardian/frontend/src/**/*.js
 !apps/guardian/frontend/src/**/*.jsx
 !apps/guardian/frontend/src/**/*.css
+!apps/guardian/frontend/src/assets/fonts/*.woff2
 # Defense in depth for future additions inside otherwise allowed source folders.
 **/.env
 **/.env.*

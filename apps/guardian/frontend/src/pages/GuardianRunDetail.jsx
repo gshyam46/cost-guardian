@@ -12,8 +12,8 @@ import { money, duration as ms, count, observedCost } from '@/lib/liveFormat';
 
 const Field = ({ label, value, tone }) => (
   <div>
-    <div className="text-xs text-slate-500 uppercase tracking-wide">{label}</div>
-    <div className="text-lg font-semibold tabular-nums mt-0.5" style={{ color: tone || '#0f172a' }}>
+    <div className="text-xs text-ink-500 uppercase tracking-wide">{label}</div>
+    <div className="text-lg font-semibold tabular-nums mt-0.5" style={{ color: tone || 'var(--sillage-ink)' }}>
       {value}
     </div>
   </div>
@@ -35,42 +35,42 @@ const CallRow = ({ call, names, index, capturedIds }) => {
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="cg-call-row w-full px-5 py-3 flex items-center gap-3 hover:bg-slate-50 text-left transition-colors"
+        className="cg-call-row w-full px-5 py-3 flex items-center gap-3 hover:bg-ink-50 text-left transition-colors"
       >
-        <Chevron className="h-4 w-4 text-slate-400 shrink-0" />
-        <span className="text-xs text-slate-400 tabular-nums w-5">{index + 1}</span>
+        <Chevron className="h-4 w-4 text-ink-400 shrink-0" />
+        <span className="text-xs text-ink-400 tabular-nums w-5">{index + 1}</span>
         <span
           className="h-2.5 w-2.5 rounded-sm shrink-0"
           style={{ backgroundColor: failed ? STATUS.critical : colorFor(call.agent_name, names) }}
         />
-        <span className="cg-call-name font-medium text-sm text-slate-900 w-44 truncate">{call.agent_name}</span>
-        <span className="cg-call-model text-xs text-slate-500 flex-1 truncate">{call.model}</span>
-        {failed && <Badge className="bg-red-100 text-red-700 hover:bg-red-100">failed</Badge>}
-        {outcomeUnknown && <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100 shrink-0">Outcome unknown</Badge>}
+        <span className="cg-call-name font-medium text-sm text-ink-900 w-44 truncate">{call.agent_name}</span>
+        <span className="cg-call-model text-xs text-ink-500 flex-1 truncate">{call.model}</span>
+        {failed && <Badge className="bg-danger-100 text-danger-700 hover:bg-danger-100">failed</Badge>}
+        {outcomeUnknown && <Badge className="bg-ink-100 text-ink-700 hover:bg-ink-100 shrink-0">Outcome unknown</Badge>}
           <>
-            <span className="cg-call-metric text-xs tabular-nums text-slate-500 w-20 text-right">
+            <span className="cg-call-metric text-xs tabular-nums text-ink-500 w-20 text-right">
               {count(call.input_tokens)} in
             </span>
-            <span className="cg-call-metric text-xs tabular-nums text-slate-500 w-20 text-right">
+            <span className="cg-call-metric text-xs tabular-nums text-ink-500 w-20 text-right">
               {count(call.output_tokens)} out
             </span>
-            <span className="cg-call-metric text-xs tabular-nums text-slate-600 w-20 text-right">
+            <span className="cg-call-metric text-xs tabular-nums text-ink-600 w-20 text-right">
               {ms(call.latency_ms)}
             </span>
-            <span className="cg-call-metric text-xs tabular-nums text-slate-600 w-20 text-right">
+            <span className="cg-call-metric text-xs tabular-nums text-ink-600 w-20 text-right">
               {money(call.cost_usd)}
             </span>
           </>
       </button>
 
       {open && (
-        <div className="px-5 pb-4 pt-1 bg-slate-50/60">
+        <div className="px-5 pb-4 pt-1 bg-ink-50/60">
           {failed && call.status_message && (
             <div className="mb-3">
-              <div className="text-xs font-medium text-slate-600 mb-1">Provider error
+              <div className="text-xs font-medium text-ink-600 mb-1">Provider error
                 {call.status_message_truncated && <span> — first 400 characters</span>}
               </div>
-              <pre className="text-xs bg-red-50 border border-red-200 text-red-900 rounded p-3 overflow-x-auto whitespace-pre-wrap">
+              <pre className="text-xs bg-danger-50 border border-danger-200 text-danger-900 rounded p-3 overflow-x-auto whitespace-pre-wrap">
                 {call.status_message}
               </pre>
             </div>
@@ -78,31 +78,31 @@ const CallRow = ({ call, names, index, capturedIds }) => {
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-3 text-xs">
             <div>
-              <div className="text-slate-500">Latency</div>
-              <div className="tabular-nums text-slate-900">
+              <div className="text-ink-500">Latency</div>
+              <div className="tabular-nums text-ink-900">
                 {ms(call.latency_ms)}
               </div>
             </div>
             <div>
-              <div className="text-slate-500">Time to first token</div>
-              <div className="tabular-nums text-slate-900">
+              <div className="text-ink-500">Time to first token</div>
+              <div className="tabular-nums text-ink-900">
                 {ms(call.time_to_first_token_ms)}
               </div>
             </div>
             <div>
-              <div className="text-slate-500">Tokens (in / out)</div>
-              <div className="tabular-nums text-slate-900">
+              <div className="text-ink-500">Tokens (in / out)</div>
+              <div className="tabular-nums text-ink-900">
                 {count(call.input_tokens)} / {count(call.output_tokens)}
               </div>
             </div>
             <div>
-              <div className="text-slate-500">Cost</div>
-              <div className="tabular-nums text-slate-900">{money(call.cost_usd)}</div>
+              <div className="text-ink-500">Cost</div>
+              <div className="tabular-nums text-ink-900">{money(call.cost_usd)}</div>
             </div>
           </div>
 
-          <p className="text-xs text-slate-500 mb-3 break-all">Observation ID: {call.id || 'Unknown'}</p>
-          {parentId && <div className="text-xs text-slate-500 mb-3">
+          <p className="text-xs text-ink-500 mb-3 break-all">Observation ID: {call.id || 'Unknown'}</p>
+          {parentId && <div className="text-xs text-ink-500 mb-3">
             <p className="break-all">Parent observation ID: {parentId}</p>
             <p className="mt-1">{capturedIds.has(parentId)
               ? 'Parent is present among captured calls.'
@@ -111,21 +111,21 @@ const CallRow = ({ call, names, index, capturedIds }) => {
 
           {call.output_preview ? (
             <div>
-              <div className="text-xs font-medium text-slate-600 mb-1">
+              <div className="text-xs font-medium text-ink-600 mb-1">
                 Model output
                 {call.output_truncated && (
-                  <span className="font-normal text-slate-400">
+                  <span className="font-normal text-ink-400">
                     {' '}
                     &mdash; first 400 characters
                   </span>
                 )}
               </div>
-              <pre className="text-xs bg-white border rounded p-3 overflow-x-auto whitespace-pre-wrap max-h-52 overflow-y-auto text-slate-700 font-mono leading-relaxed">
+              <pre className="text-xs bg-card border rounded p-3 overflow-x-auto whitespace-pre-wrap max-h-52 overflow-y-auto text-ink-700 font-mono leading-relaxed">
                 {call.output_preview}
               </pre>
             </div>
           ) : (
-            !failed && <div className="text-xs text-slate-400">No output captured.</div>
+            !failed && <div className="text-xs text-ink-400">No output captured.</div>
           )}
         </div>
       )}
@@ -147,7 +147,7 @@ const GuardianRunDetail = () => {
   if (loading || (run && run.id !== traceId && !error)) {
     return (
       <GuardianLayout>
-        <div className="animate-pulse text-slate-600">Loading run...</div>
+        <div className="animate-pulse text-ink-600">Loading run...</div>
       </GuardianLayout>
     );
   }
@@ -161,7 +161,7 @@ const GuardianRunDetail = () => {
         </Button>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-ink-600">
               This trace is unavailable. Sillage could not read its telemetry.
             </p>
           </CardContent>
@@ -177,23 +177,23 @@ const GuardianRunDetail = () => {
 
   return (
     <GuardianLayout refreshing={refreshing} lastUpdated={lastUpdated}>
-      {(run.stale || error) && <Card className="mb-4 border-amber-200 bg-amber-50"><CardContent className="py-3">
+      {(run.stale || error) && <Card className="mb-4 border-ochre-200 bg-ochre-50"><CardContent className="py-3">
         <p role="status">Showing stale trace data. The last successful read was {run.fetched_at || 'at an unknown time'}.</p>
       </CardContent></Card>}
-      {run.coverage?.status !== 'complete' && <Card className="mb-4 border-amber-200 bg-amber-50"><CardContent className="py-3">
+      {run.coverage?.status !== 'complete' && <Card className="mb-4 border-ochre-200 bg-ochre-50"><CardContent className="py-3">
         <p role="status">Partial observation coverage. Counts and known costs describe accepted observations only.
           {' '}{count(run.coverage?.invalid_count)} rejected; {count(run.coverage?.duplicate_count)} repeated.
           {run.coverage?.truncated && <> The read budget allows up to {count(run.coverage.max_records)} records or {count(run.coverage.max_pages)} pages.</>}
           {run.coverage?.reason && <> Read status: {run.coverage.reason}.</>}
         </p>
       </CardContent></Card>}
-      {run.aggregate_issues?.length > 0 && <Card className="mb-4 border-amber-200 bg-amber-50"><CardContent className="py-3">
+      {run.aggregate_issues?.length > 0 && <Card className="mb-4 border-ochre-200 bg-ochre-50"><CardContent className="py-3">
         <p role="status">Some aggregate amounts exceed the supported numeric range and are shown as unknown.</p>
       </CardContent></Card>}
       {empty && <Card className="mb-4"><CardContent className="py-4">
         <p role="status">{notObserved ? 'No generation calls observed in this query window. This does not establish that the trace is missing.'
           : 'No accepted generation calls could be established from this partial read. Trace existence remains undetermined.'}</p>
-        <p className="text-sm text-slate-500 mt-1">Spend, usage and workflow duration cannot be established from this read.</p>
+        <p className="text-sm text-ink-500 mt-1">Spend, usage and workflow duration cannot be established from this read.</p>
       </CardContent></Card>}
       <Button variant="ghost" size="sm" onClick={() => navigate('/live')} className="mb-4">
         <ArrowLeft className="h-4 w-4 mr-1" />
@@ -203,9 +203,9 @@ const GuardianRunDetail = () => {
       <div className="flex items-start justify-between mb-5 gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <h2 className="text-xl font-semibold text-slate-900">{run.name}</h2>
+            <h2 className="cg-page-title text-xl font-semibold text-ink-900">{run.name}</h2>
             {run.error_count > 0 ? (
-              <Badge className="bg-red-100 text-red-700 hover:bg-red-100">
+              <Badge className="bg-danger-100 text-danger-700 hover:bg-danger-100">
                 {run.error_count} observed {run.error_count === 1 ? 'error' : 'errors'}
               </Badge>
             ) : (
@@ -214,13 +214,13 @@ const GuardianRunDetail = () => {
               </Badge>
             )}
           </div>
-          <p className="text-xs text-slate-500 font-mono truncate">{run.id}</p>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-ink-500 font-mono truncate">{run.id}</p>
+          <p className="text-xs text-ink-500 mt-0.5">
             First observed call: {run.started_at ? new Date(run.started_at).toLocaleString() : 'Unknown'}
           </p>
-          <p className="text-sm text-slate-500 mt-1">Workflow outcome unknown. LLM observations do not establish a completed customer operation.</p>
-          <p className="text-xs text-slate-500 mt-2 break-words">Query window: last {run.window_hours || 168} hours, from {run.coverage?.window_start || 'unknown'} to {run.coverage?.window_end || 'unknown'}.</p>
-          <p className="text-xs text-slate-500 mt-1">Source retention may shorten accessible history. A complete query covers accessible observations in this window; delayed telemetry may still arrive.</p>
+          <p className="text-sm text-ink-500 mt-1">Workflow outcome unknown. LLM observations do not establish a completed customer operation.</p>
+          <p className="text-xs text-ink-500 mt-2 break-words">Query window: last {run.window_hours || 168} hours, from {run.coverage?.window_start || 'unknown'} to {run.coverage?.window_end || 'unknown'}.</p>
+          <p className="text-xs text-ink-500 mt-1">Source retention may shorten accessible history. A complete query covers accessible observations in this window; delayed telemetry may still arrive.</p>
         </div>
         {run.langfuse_url && (
           <a href={run.langfuse_url} target="_blank" rel="noreferrer" className="shrink-0">
@@ -244,7 +244,7 @@ const GuardianRunDetail = () => {
           />
           <Field label="Known observed cost" value={observedCost(run.cost_usd, run.known_cost_usd, run.cost_known_count)} />
         </CardContent>
-        <CardContent><p className="text-xs text-slate-500">{count(run.cost_unknown_count)} observations missing cost;
+        <CardContent><p className="text-xs text-ink-500">{count(run.cost_unknown_count)} observations missing cost;
           {' '}{count(run.tokens_unknown_count)} missing token totals; {count(run.latency_unknown_count)} missing duration.</p></CardContent>
       </Card>
 

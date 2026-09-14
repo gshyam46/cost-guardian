@@ -1,0 +1,12 @@
+{
+  "short_name": "Sillage",
+  "name": "Sillage — Understand your AI",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ],
+  "start_url": "/welcome",
+  "display": "standalone",
+  "theme_color": "#A64232",
+  "background_color": "#F6F0E6"
+}

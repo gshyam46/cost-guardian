@@ -20,6 +20,7 @@
     { "source": "/welcome", "destination": "/index.html" },
     { "source": "/demo", "destination": "/index.html" },
     { "source": "/signup", "destination": "/index.html" },
+    { "source": "/waitlist", "destination": "/index.html" },
     { "source": "/privacy", "destination": "/index.html" },
     { "source": "/signin", "destination": "/index.html" },
     { "source": "/setup", "destination": "/index.html" }

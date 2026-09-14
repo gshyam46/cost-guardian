@@ -86,40 +86,40 @@ export default function MonitoringPolicySetup() {
 
   return <Card className="mt-6" aria-labelledby="monitoring-policy-title">
     <CardHeader><h2 id="monitoring-policy-title" className="font-semibold text-lg">Monitoring rules</h2></CardHeader>
-    <CardContent className="space-y-4 text-sm text-slate-600">
+    <CardContent className="space-y-4 text-sm text-ink-600">
       <p>Set limits that create incidents for expensive or slow calls, and choose whether reported call errors create incidents.</p>
       {(!currentScope || state.loading) && <p role="status">{currentScope && state.policy ? 'Refreshing saved rules...' : 'Loading monitoring rules...'}</p>}
-      {currentScope && state.error && <div role="alert" className="rounded border border-amber-200 bg-amber-50 p-3 text-amber-950">
+      {currentScope && state.error && <div role="alert" className="rounded border border-ochre-200 bg-ochre-50 p-3 text-ochre-950">
         <p>{state.error}</p>{state.policy && <p className="mt-1">Showing previously fetched rules; current settings are unconfirmed.</p>}
       </div>}
-      {currentScope && state.notice && <p role="status" className="text-slate-800">{state.notice}</p>}
+      {currentScope && state.notice && <p role="status" className="text-ink-800">{state.notice}</p>}
       <Button variant="outline" onClick={load} disabled={state.loading || state.saving}>Reload saved rules</Button>
       {currentScope && state.policy && <>
-        <section aria-label="Current monitoring rules" className="rounded border bg-slate-50 p-3">
-          <p className="font-medium text-slate-900">{state.policy.revision === 0 ? 'Default monitoring rules' : `Saved revision ${state.policy.revision}`}</p>
+        <section aria-label="Current monitoring rules" className="rounded border bg-ink-50 p-3">
+          <p className="font-medium text-ink-900">{state.policy.revision === 0 ? 'Default monitoring rules' : `Saved revision ${state.policy.revision}`}</p>
           <dl className="mt-2 space-y-2">
-            <div><dt>Cost per call</dt><dd className="font-medium text-slate-800">{state.policy.rules.max_call_cost_usd === null ? 'Absolute cost limit disabled' : `Above $${state.policy.rules.max_call_cost_usd} USD`}</dd></div>
-            <div><dt>Duration per call</dt><dd className="font-medium text-slate-800">{state.policy.rules.max_call_latency_ms === null ? 'Absolute duration limit disabled' : `Above ${state.policy.rules.max_call_latency_ms.toLocaleString('en-US')} ms`}</dd></div>
-            <div><dt>Reported call errors</dt><dd className="font-medium text-slate-800">{state.policy.rules.alert_on_errors ? 'Create incidents' : 'Error alerts disabled'}</dd></div>
+            <div><dt>Cost per call</dt><dd className="font-medium text-ink-800">{state.policy.rules.max_call_cost_usd === null ? 'Absolute cost limit disabled' : `Above $${state.policy.rules.max_call_cost_usd} USD`}</dd></div>
+            <div><dt>Duration per call</dt><dd className="font-medium text-ink-800">{state.policy.rules.max_call_latency_ms === null ? 'Absolute duration limit disabled' : `Above ${state.policy.rules.max_call_latency_ms.toLocaleString('en-US')} ms`}</dd></div>
+            <div><dt>Reported call errors</dt><dd className="font-medium text-ink-800">{state.policy.rules.alert_on_errors ? 'Create incidents' : 'Error alerts disabled'}</dd></div>
           </dl>
           {state.policy.updated_at && <p className="mt-3 text-xs">Updated {new Date(state.policy.updated_at).toISOString().replace('T', ' ').replace('Z', ' UTC')} by {state.policy.updated_by.name}.</p>}
         </section>
         {canManage ? <form onSubmit={save} className="space-y-4" aria-label="Edit monitoring rules">
-          <div><label htmlFor="policy-cost" className="block font-medium text-slate-800">Maximum cost per call (USD)</label>
+          <div><label htmlFor="policy-cost" className="block font-medium text-ink-800">Maximum cost per call (USD)</label>
             <input id="policy-cost" type="text" inputMode="decimal" autoComplete="off" maxLength={22}
               value={state.draft.cost} disabled={state.saving} onChange={(event) => change('cost', event.target.value)}
-              aria-describedby="policy-cost-help" className="mt-1 w-full max-w-sm rounded border px-3 py-2 text-slate-900" />
+              aria-describedby="policy-cost-help" className="mt-1 w-full max-w-sm rounded border px-3 py-2 text-ink-900" />
             <p id="policy-cost-help" className="mt-1 text-xs">Leave blank to disable. Zero is valid. A known cost must be strictly greater than this limit; missing prices cannot trigger it.</p>
           </div>
-          <div><label htmlFor="policy-latency" className="block font-medium text-slate-800">Maximum duration per call (milliseconds)</label>
+          <div><label htmlFor="policy-latency" className="block font-medium text-ink-800">Maximum duration per call (milliseconds)</label>
             <input id="policy-latency" type="text" inputMode="numeric" autoComplete="off" maxLength={8}
               value={state.draft.latency} disabled={state.saving} onChange={(event) => change('latency', event.target.value)}
-              aria-describedby="policy-latency-help" className="mt-1 w-full max-w-sm rounded border px-3 py-2 text-slate-900" />
+              aria-describedby="policy-latency-help" className="mt-1 w-full max-w-sm rounded border px-3 py-2 text-ink-900" />
             <p id="policy-latency-help" className="mt-1 text-xs">Leave blank to disable. Use a whole number from 0 to 86,400,000; equality does not trigger an incident.</p>
           </div>
-          <label className="flex items-start gap-2 text-slate-800"><input id="policy-errors" type="checkbox" checked={state.draft.errors}
+          <label className="flex items-start gap-2 text-ink-800"><input id="policy-errors" type="checkbox" checked={state.draft.errors}
             disabled={state.saving} onChange={(event) => change('errors', event.target.checked)} className="mt-1" />Create incidents for reported call errors</label>
-          {!rules && <p role="alert" className="text-amber-900">Use a nonnegative USD decimal with up to 12 decimal places and a whole-number duration within the allowed range.</p>}
+          {!rules && <p role="alert" className="text-ochre-900">Use a nonnegative USD decimal with up to 12 decimal places and a whole-number duration within the allowed range.</p>}
           <div className="flex flex-wrap gap-3">
             <Button type="submit" disabled={state.loading || state.saving || state.mustRead || !rules || !dirty}>{state.saving ? 'Saving rules...' : 'Save monitoring rules'}</Button>
             <Button type="button" variant="outline" disabled={state.saving || !dirty}
@@ -130,7 +130,7 @@ export default function MonitoringPolicySetup() {
       <div className="space-y-2 text-xs">
         <p>Existing relative cost and latency checks remain active. These limits apply to calls whose evaluation has not started; saved changes do not rescore historical incidents.</p>
         <p>Saving rules does not establish capture or worker health. These rules create incidents; notification delivery is configured separately, and spending limits are not enforced.</p>
-        <Link to="/incidents" className="inline-block underline text-slate-800">Review incidents</Link>
+        <Link to="/incidents" className="inline-block underline text-ink-800">Review incidents</Link>
       </div>
     </CardContent>
   </Card>;

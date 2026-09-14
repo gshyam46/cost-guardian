@@ -1,12 +1,17 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import PublicAccess, { PrivacyNotice } from './pages/PublicAccess';
+import PublicAccess, { PrivacyNotice, WaitlistPage } from './pages/PublicAccess';
 
 let root;
 let container;
 let originalFetch;
 const acknowledgment = { registered: true, status: 'interest_recorded', schema_version: 1 };
 const ready = { available: true, workspace_url: 'https://workspace.example.test', reason: 'ready' };
+const comingSoon = { available: false, workspace_url: null, reason: 'coming_soon' };
+const confirmedTitle = 'You’re on the list.';
+const interestCalls = () => global.fetch.mock.calls.filter(([url]) => url === '/api/interest');
+const acknowledgeRegistration = () => global.fetch.mockImplementation(async url => url === '/api/interest'
+  ? response(acknowledgment, 202) : response(comingSoon));
 const response = (body, status = 200) => ({ status, json: async () => body });
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 const button = label => [...container.querySelectorAll('button')].find(node => node.textContent.trim().startsWith(label));
@@ -14,6 +19,8 @@ const render = async intent => act(async () => root.render(<PublicAccess intent=
 const fill = async (name, value) => {
   const element = container.querySelector(`[name="${name}"]`);
   await act(async () => {
+    const details = element.closest('details');
+    if (details && !details.open) details.open = true;
     if (element.type === 'checkbox') {
       if (element.checked !== value) element.click();
     } else {
@@ -30,6 +37,7 @@ const completeForm = async () => {
 };
 const submit = async () => act(async () => container.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
 beforeEach(() => {
+  window.history.replaceState(null, '', '/signup');
   originalFetch = global.fetch;
   global.fetch = jest.fn().mockResolvedValue(response({ available: false, workspace_url: null, reason: 'coming_soon' }));
   container = document.createElement('div');
@@ -51,14 +59,14 @@ test('signup opens the independent interest form without fetching auth or availa
   localStorage.setItem('guardian_api_key', 'existing-key');
   await render('signup');
   expect(global.fetch).not.toHaveBeenCalled();
-  expect(container.textContent).toContain('Get early access to Sillage');
+  expect(container.textContent).toContain('A clearer view of your AI.');
   expect(container.querySelector('[name="name"]').required).toBe(true);
   expect(container.querySelector('[name="email"]').type).toBe('email');
   expect(container.querySelector('[name="consent"]').checked).toBe(false);
   expect(container.querySelector('[type="password"]')).toBeNull();
   expect(localStorage.getItem('guardian_api_key')).toBe('existing-key');
   expect(sessionStorage.length).toBe(0);
-  expect(container.textContent).toContain('does not create a workspace or sign you in');
+  expect(container.textContent).toContain('Registration saves your contact details. Workspace sign-in is separate.');
   expect(container.querySelector('a[href="/privacy"]')).not.toBeNull();
 });
 
@@ -100,7 +108,7 @@ test.each([
 
 test('coming soon invites registration and retry recovery keeps entered details', async () => {
   await render('onboarding');
-  expect(container.textContent).toContain('Early access is coming soon');
+  expect(container.textContent).toContain('Sign-in is coming soon');
   await fill('name', 'Retained Founder');
   global.fetch.mockResolvedValue(response(ready));
   await act(async () => button('Retry access').click());
@@ -138,25 +146,31 @@ test('a hanging availability request times out and its late response cannot repl
 test.each(['signup', 'signin', 'onboarding'])('registration from %s saves only after the explicit acknowledgment', async intent => {
   await render(intent);
   global.fetch.mockClear();
-  global.fetch.mockResolvedValue(response(acknowledgment, 202));
+  acknowledgeRegistration();
   await completeForm();
   await fill('company', ' Example Team ');
   await fill('use_case', ' A support assistant. ');
   await submit();
-  expect(global.fetch).toHaveBeenCalledTimes(1);
+  expect(interestCalls()).toHaveLength(1);
   const [url, options] = global.fetch.mock.calls[0];
   expect(url).toBe('/api/interest');
   expect(options.credentials).toBe('omit');
   expect(options.headers).toEqual({ 'Content-Type': 'application/json', Accept: 'application/json' });
   expect(JSON.parse(options.body)).toEqual({ schema_version: 1, name: 'Test Founder', email: 'founder@example.test',
     company: 'Example Team', use_case: 'A support assistant.', consent: true, source: intent });
-  expect(container.textContent).toContain('Interest registered');
+  expect(container.textContent).toContain(confirmedTitle);
   expect(container.textContent).toContain('This does not create an account');
   expect(container.querySelector('form')).toBeNull();
   expect(container.textContent).not.toContain('founder@example.test');
   expect(localStorage.length).toBe(0);
   expect(sessionStorage.length).toBe(0);
   expect(window.location.href).not.toContain('founder');
+  expect(window.location.pathname).toBe('/waitlist');
+  expect(window.location.search).toBe('');
+  expect(window.history.state).toBeNull();
+  expect(document.activeElement.id).toBe('waitlist-title');
+  expect(global.fetch.mock.calls.map(([url]) => url)).toEqual(['/api/interest', '/api/availability']);
+  expect(container.textContent).toContain('Workspace access is coming soon.');
 });
 
 test('required fields and affirmative consent are checked before sending any request', async () => {
@@ -193,11 +207,11 @@ test.each(['Founder+team@EXAMPLE.TEST', `${'a'.repeat(64)}@${'b'.repeat(63)}.tes
     await render('signup');
     await completeForm();
     await fill('email', email);
-    global.fetch.mockResolvedValue(response(acknowledgment, 202));
+    acknowledgeRegistration();
     await submit();
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(interestCalls()).toHaveLength(1);
     expect(JSON.parse(global.fetch.mock.calls[0][1].body).email).toBe(email);
-    expect(container.textContent).toContain('Interest registered');
+    expect(container.textContent).toContain(confirmedTitle);
   });
 
 test('multibyte input cannot exceed the bounded request even within individual character limits', async () => {
@@ -221,12 +235,14 @@ test.each([
   await completeForm();
   await submit();
   expect(container.textContent).toContain('could not confirm');
-  expect(container.textContent).not.toContain('Interest registered');
+  expect(container.textContent).not.toContain(confirmedTitle);
   expect(container.textContent).not.toContain('private-storage');
   expect(container.querySelector('[name="name"]').value).toBe('  Test Founder  ');
   expect(container.querySelector('[name="email"]').value).toBe('founder@example.test');
   expect(container.querySelector('[name="consent"]').checked).toBe(true);
-  expect(button('Register interest').disabled).toBe(false);
+  expect(button('Register').disabled).toBe(false);
+  expect(window.location.pathname).toBe('/signup');
+  expect(global.fetch.mock.calls.map(([url]) => url)).toEqual(['/api/interest']);
 });
 
 test('duplicate clicks make one pending request and rate limits retain a retryable form', async () => {
@@ -239,7 +255,7 @@ test('duplicate clicks make one pending request and rate limits retain a retryab
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   });
-  expect(global.fetch).toHaveBeenCalledTimes(1);
+  expect(interestCalls()).toHaveLength(1);
   expect(container.querySelector('fieldset').disabled).toBe(true);
   await act(async () => waiting.resolve(response({ registered: false, error: 'rate_limited' }, 429)));
   expect(container.textContent).toContain('Please wait a moment');
@@ -257,7 +273,7 @@ test.each([[400, 'Please check your name, email and other details'], [413, 'Plea
     expect(container.textContent).toContain(message);
     expect(container.textContent).not.toContain('could not confirm');
     expect(container.textContent).not.toContain('private-server-diagnostic');
-    expect(container.textContent).not.toContain('Interest registered');
+    expect(container.textContent).not.toContain(confirmedTitle);
     expect(container.querySelector('[name="email"]').value).toBe('founder@example.test');
     expect(container.querySelector('[name="use_case"]').value).toBe('Retain this project description.');
     expect(container.querySelector('[name="consent"]').checked).toBe(true);
@@ -275,11 +291,13 @@ test('late submit success after timeout cannot claim registration and explicit r
   await act(async () => jest.advanceTimersByTime(5000));
   expect(signal.aborted).toBe(true);
   expect(container.textContent).toContain('could not confirm');
+  expect(window.location.pathname).toBe('/signup');
   await act(async () => waiting.resolve(response(acknowledgment, 202)));
-  expect(container.textContent).not.toContain('Interest registered');
-  global.fetch.mockResolvedValue(response(acknowledgment, 202));
+  expect(container.textContent).not.toContain(confirmedTitle);
+  expect(window.location.pathname).toBe('/signup');
+  acknowledgeRegistration();
   await submit();
-  expect(container.textContent).toContain('Interest registered');
+  expect(container.textContent).toContain(confirmedTitle);
 });
 
 test('intent change cancels pending registration and does not apply its late acknowledgment', async () => {
@@ -292,7 +310,7 @@ test('intent change cancels pending registration and does not apply its late ack
   await render('signin');
   expect(signal.aborted).toBe(true);
   await act(async () => waiting.resolve(response(acknowledgment, 202)));
-  expect(container.textContent).not.toContain('Interest registered');
+  expect(container.textContent).not.toContain(confirmedTitle);
   expect(container.querySelector('[name="email"]').value).toBe('');
 });
 
@@ -344,4 +362,128 @@ test('valid email punctuation cannot become mail-link headers or query parameter
   expect(link.textContent).toBe('privacy?subject=unexpected@example.test');
   expect(new URL(link.href).search).toBe('');
   expect(link.getAttribute('href')).toBe('mailto:privacy%3Fsubject%3Dunexpected%40example.test');
+});
+
+test('optional details are disclosed separately and validation opens them for correction', async () => {
+  await render('signup');
+  const details = container.querySelector('details');
+  expect(details.open).toBe(false);
+  expect(details.querySelector('summary').textContent).toContain('Add company or project details');
+  expect(container.querySelector('form').getAttribute('aria-label')).toBe('Register with Sillage');
+  await completeForm();
+  await fill('company', 'A'.repeat(121));
+  details.open = false;
+  await submit();
+  expect(details.open).toBe(true);
+  expect(document.activeElement.name).toBe('company');
+  expect(container.textContent).toContain('Keep your company name within 120 characters');
+  expect(global.fetch).not.toHaveBeenCalled();
+});
+
+test('a network or unreadable acknowledgment keeps the registration and original route', async () => {
+  await render('signup');
+  await completeForm();
+  global.fetch.mockRejectedValue(new Error('private-provider-error'));
+  await submit();
+  expect(container.textContent).toContain('could not confirm');
+  expect(container.textContent).not.toContain('private-provider-error');
+  global.fetch.mockResolvedValue({ status: 202, json: async () => { throw new Error('private-response'); } });
+  await submit();
+  expect(window.location.pathname).toBe('/signup');
+  expect(container.querySelector('[name="email"]').value).toBe('founder@example.test');
+  expect(container.textContent).not.toContain(confirmedTitle);
+  expect(container.textContent).not.toContain('private-response');
+});
+
+test('an acknowledgment whose body finishes after the deadline cannot navigate or clear details', async () => {
+  jest.useFakeTimers();
+  const body = deferred();
+  await render('signup');
+  global.fetch.mockResolvedValue({ status: 202, json: () => body.promise });
+  await completeForm();
+  await submit();
+  await act(async () => jest.advanceTimersByTime(5000));
+  await act(async () => body.resolve(acknowledgment));
+  expect(window.location.pathname).toBe('/signup');
+  expect(container.querySelector('[name="email"]').value).toBe('founder@example.test');
+  expect(container.textContent).not.toContain(confirmedTitle);
+  expect(container.textContent).toContain('could not confirm');
+});
+
+test('direct waitlist entry does not accept a query, history state or browser storage as registration proof', async () => {
+  window.history.replaceState({ registered: true, confirmed: true }, '', '/waitlist?registered=true');
+  localStorage.setItem('sillage_registered', 'true');
+  sessionStorage.setItem('sillage_registration', JSON.stringify(acknowledgment));
+  await act(async () => root.render(<WaitlistPage />));
+  expect(container.querySelector('h1').textContent).toBe('Find your way into Sillage.');
+  expect(container.textContent).toContain('This page cannot confirm a registration');
+  expect(container.textContent).not.toContain(confirmedTitle);
+  expect(container.textContent).not.toContain('REGISTRATION RECEIVED');
+  expect(container.querySelector('main a[href="/signup"]')).not.toBeNull();
+  expect(button('Check availability again')).toBeDefined();
+  expect(global.fetch.mock.calls.map(([url]) => url)).toEqual(['/api/availability']);
+  expect(interestCalls()).toHaveLength(0);
+});
+
+test('reloading the acknowledged route cannot recover the in-memory success state', async () => {
+  await render('signup');
+  acknowledgeRegistration();
+  await completeForm();
+  await submit();
+  expect(window.location.pathname).toBe('/waitlist');
+  expect(container.textContent).toContain(confirmedTitle);
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  await act(async () => root.render(<WaitlistPage confirmed={false} />));
+  expect(container.querySelector('h1').textContent).toBe('Find your way into Sillage.');
+  expect(container.textContent).not.toContain(confirmedTitle);
+  expect(container.textContent).not.toContain('founder@example.test');
+  expect(localStorage.length).toBe(0);
+  expect(sessionStorage.length).toBe(0);
+  expect(interestCalls()).toHaveLength(1);
+});
+
+test('waitlist availability grants only a link for an already-authorized visitor and never redirects', async () => {
+  window.history.replaceState(null, '', '/waitlist');
+  global.fetch.mockResolvedValue(response(ready));
+  await act(async () => root.render(<WaitlistPage confirmed={false} />));
+  expect(container.textContent).toContain('Already have workspace access?');
+  expect(container.querySelector('main a[href="https://workspace.example.test/signin"]')).not.toBeNull();
+  expect(container.querySelector('main a[href="/signup"]')).not.toBeNull();
+  expect(container.textContent).not.toContain(confirmedTitle);
+  expect(window.location.pathname).toBe('/waitlist');
+  const [, options] = global.fetch.mock.calls[0];
+  expect(options.credentials).toBe('omit');
+  expect(options.mode).toBe('same-origin');
+  expect(options.headers).toEqual({ Accept: 'application/json' });
+});
+
+test('waitlist failure, timeout and retry keep a neutral page and ignore stale responses', async () => {
+  jest.useFakeTimers();
+  const pending = deferred();
+  global.fetch.mockReturnValueOnce(pending.promise);
+  await act(async () => root.render(<WaitlistPage />));
+  const signal = global.fetch.mock.calls[0][1].signal;
+  await act(async () => jest.advanceTimersByTime(5000));
+  expect(signal.aborted).toBe(true);
+  expect(container.textContent).toContain('Workspace sign-in is currently unavailable.');
+  global.fetch.mockResolvedValue(response(ready));
+  await act(async () => button('Check availability again').click());
+  await act(async () => pending.resolve(response({ ...ready, workspace_url: 'javascript:private-value' })));
+  expect(container.querySelector('main a[href="https://workspace.example.test/signin"]')).not.toBeNull();
+  expect(container.textContent).not.toContain('private-value');
+  expect(container.textContent).not.toContain(confirmedTitle);
+  expect(interestCalls()).toHaveLength(0);
+});
+
+test('unmounting the waitlist cancels its own availability request', async () => {
+  const pending = deferred();
+  global.fetch.mockReturnValueOnce(pending.promise);
+  await act(async () => root.render(<WaitlistPage />));
+  const signal = global.fetch.mock.calls[0][1].signal;
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  expect(signal.aborted).toBe(true);
+  await act(async () => pending.resolve(response(ready)));
+  expect(container.textContent).toBe('');
 });

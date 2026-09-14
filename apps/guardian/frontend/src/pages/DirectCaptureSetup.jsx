@@ -12,18 +12,18 @@ import PythonLauncherSetup from './PythonLauncherSetup';
 
 const count = (value) => Number.isSafeInteger(value) && value >= 0 ? value.toLocaleString('en-US') : 'Unknown';
 const time = (value) => value ? new Date(value).toISOString().replace('T', ' ').replace('Z', ' UTC') : 'Not recorded';
-const Row = ({ label, children }) => <div className="py-2"><dt className="text-xs text-slate-500">{label}</dt>
-  <dd className="mt-1 text-sm text-slate-800 break-words">{children}</dd></div>;
+const Row = ({ label, children }) => <div className="py-2"><dt className="text-xs text-ink-500">{label}</dt>
+  <dd className="mt-1 text-sm text-ink-800 break-words">{children}</dd></div>;
 
 const SetupStep = ({ id, number, title, description, state, open, toggle, children }) => <details id={`connection-${id}`}
-  open={open} className="rounded-xl border border-slate-200 bg-white overflow-hidden scroll-mt-6">
-  <summary onClick={(event) => { event.preventDefault(); toggle(); }} className="flex cursor-pointer list-none items-start gap-4 p-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700">
-    <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700">{number}</span>
-    <span className="flex-1 min-w-0"><span className="block text-base font-semibold text-slate-900">{title}</span>
-      <span className="mt-1 block text-sm text-slate-600">{description}</span><span className="mt-2 block text-xs text-slate-500 sm:hidden">{state}</span></span>
-    <span className="shrink-0 text-xs text-slate-500 pt-1"><span className="hidden sm:inline">{state}</span><span aria-hidden="true" className="ml-3 text-lg">{open ? '−' : '+'}</span></span>
+  open={open} className="rounded-xl border border-ink-200 bg-card overflow-hidden scroll-mt-6">
+  <summary onClick={(event) => { event.preventDefault(); toggle(); }} className="flex cursor-pointer list-none items-start gap-4 p-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brick-700">
+    <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink-100 text-sm font-semibold text-ink-700">{number}</span>
+    <span className="flex-1 min-w-0"><span className="block text-base font-semibold text-ink-900">{title}</span>
+      <span className="mt-1 block text-sm text-ink-600">{description}</span><span className="mt-2 block text-xs text-ink-500 sm:hidden">{state}</span></span>
+    <span className="shrink-0 text-xs text-ink-500 pt-1"><span className="hidden sm:inline">{state}</span><span aria-hidden="true" className="ml-3 text-lg">{open ? '−' : '+'}</span></span>
   </summary>
-  <div className="border-t border-slate-100 p-5">{children}</div>
+  <div className="border-t border-ink-100 p-5">{children}</div>
 </details>;
 
 const example = `// Invoke from your existing background telemetry queue/job.
@@ -91,12 +91,12 @@ function ManualProviderIntegration() {
       if (currentVersion === version.current) setCopyStatus('Clipboard access failed. Select and copy the integration code below.');
     }
   };
-  return <section aria-labelledby="provider-integration-title" className="text-sm text-slate-600 space-y-4">
+  return <section aria-labelledby="provider-integration-title" className="text-sm text-ink-600 space-y-4">
       <div aria-label="Capture integration" className="flex flex-wrap gap-2">
         <Button variant={method === 'openai' ? 'default' : 'outline'} aria-pressed={method === 'openai'} onClick={() => change(setMethod, 'openai')}>OpenAI helpers</Button>
         <Button variant={method === 'custom' ? 'default' : 'outline'} aria-pressed={method === 'custom'} onClick={() => change(setMethod, 'custom')}>Other providers / custom JSON</Button>
       </div>
-      <h2 id="provider-integration-title" className="font-semibold text-base text-slate-900">{method === 'openai' ? 'Connect your OpenAI calls' : 'Connect another provider'}</h2>
+      <h2 id="provider-integration-title" className="font-semibold text-base text-ink-900">{method === 'openai' ? 'Connect your OpenAI calls' : 'Connect another provider'}</h2>
       <div hidden={method !== 'openai'} className="space-y-4">
       <p>Choose your application's language. Add the helper around an existing model call; it sends call duration, status and reported token usage to Sillage in the background. Keep your existing OpenAI client and provider key in your application.</p>
       <div role="tablist" aria-label="Integration language" className="flex gap-2">
@@ -110,33 +110,33 @@ function ManualProviderIntegration() {
           }}>{value === 'python' ? 'Python' : 'Node'}</Button>)}
       </div>
       <div role="tabpanel" id="provider-recipe-panel" aria-labelledby={`provider-tab-${language}`} className="space-y-3">
-        <p><strong className="text-slate-900">1. Download the capture files.</strong> Extract these three files into your server application and keep them together. These are repository source modules, not published packages.</p>
+        <p><strong className="text-ink-900">1. Download the capture files.</strong> Extract these three files into your server application and keep them together. These are repository source modules, not published packages.</p>
         {captureOrigin ? <a href={`${captureOrigin}/api/guardian/integrations/${language}.zip`} download={`sillage-${language}.zip`}
-          className="inline-flex items-center rounded-md border border-teal-800 px-4 py-2 font-medium text-teal-900 hover:bg-teal-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700">
+          className="inline-flex items-center rounded-md border border-brick-800 px-4 py-2 font-medium text-brick-900 hover:bg-brick-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brick-700">
           Download {language === 'python' ? 'Python' : 'Node'} helpers
         </a> : <p role="status">The capture address is unavailable. Retry workspace sign-in before downloading helpers.</p>}
         <ul className="list-disc pl-5 font-mono text-xs space-y-1">{providerModules(language).map((name) => <li key={name}>{name}</li>)}</ul>
         <p className="text-xs">Using a repository checkout? The same files are in <code>examples/native-capture/</code>. Keep your provider client and its credentials in your application.</p>
         <div className="flex flex-wrap items-end gap-4">
           <div><label htmlFor="provider-api" className="block mb-1">OpenAI API</label>
-            <select id="provider-api" value={api} onChange={(event) => change(setApi, event.target.value)} className="border rounded-md bg-white px-3 py-2 text-slate-900">
+            <select id="provider-api" value={api} onChange={(event) => change(setApi, event.target.value)} className="border rounded-md bg-card px-3 py-2 text-ink-900">
               <option value="responses">Responses</option><option value="chat_completions">Chat Completions</option>
             </select></div>
           <label className="flex items-center gap-2 py-2"><input type="checkbox" checked={streaming} onChange={(event) => change(setStreaming, event.target.checked)} />Streaming response</label>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <p className="font-medium text-slate-900">2. Set these in your application's server configuration</p>
+        <div className="rounded-lg border border-ink-200 bg-ink-50 p-4">
+          <p className="font-medium text-ink-900">2. Set these in your application's server configuration</p>
           <dl className="mt-3 space-y-3 text-xs">
-            <div><dt className="font-mono font-semibold text-slate-800">GUARDIAN_URL</dt><dd className="mt-1">{captureOrigin || 'Unavailable'} — this Sillage deployment's base address, without /api.</dd></div>
-            <div><dt className="font-mono font-semibold text-slate-800">GUARDIAN_INGEST_KEY</dt><dd className="mt-1">The ingestion key you create in step 1. This is not your OpenAI key or dashboard sign-in.</dd></div>
-            <div><dt className="font-mono font-semibold text-slate-800">OPENAI_MODEL</dt><dd className="mt-1">The model your application already uses.</dd></div>
+            <div><dt className="font-mono font-semibold text-ink-800">GUARDIAN_URL</dt><dd className="mt-1">{captureOrigin || 'Unavailable'} — this Sillage deployment's base address, without /api.</dd></div>
+            <div><dt className="font-mono font-semibold text-ink-800">GUARDIAN_INGEST_KEY</dt><dd className="mt-1">The ingestion key you create in step 1. This is not your OpenAI key or dashboard sign-in.</dd></div>
+            <div><dt className="font-mono font-semibold text-ink-800">OPENAI_MODEL</dt><dd className="mt-1">The model your application already uses.</dd></div>
           </dl>
         </div>
-        <p><strong className="text-slate-900">3. Wrap your existing call.</strong> Replace the existing-client, request-argument and stream-consumer variables with your application's own code. Use a technical agent/model label; do not put customer identifiers in metadata.</p>
+        <p><strong className="text-ink-900">3. Wrap your existing call.</strong> Replace the existing-client, request-argument and stream-consumer variables with your application's own code. Use a technical agent/model label; do not put customer identifiers in metadata.</p>
         <Button variant="outline" onClick={copyCode}>Copy integration code</Button>
         {copyStatus && <p role="status">{copyStatus}</p>}
-        <pre aria-label="OpenAI integration code" tabIndex={0} className="p-3 bg-slate-50 border rounded text-xs overflow-x-auto whitespace-pre-wrap break-words"><code>{code}</code></pre>
-        <details className="rounded-lg border border-slate-200 p-3"><summary className="cursor-pointer font-medium text-slate-800">Runtime and streaming details</summary>
+        <pre aria-label="OpenAI integration code" tabIndex={0} className="p-3 bg-ink-50 border rounded text-xs overflow-x-auto whitespace-pre-wrap break-words"><code>{code}</code></pre>
+        <details className="rounded-lg border border-ink-200 p-3"><summary className="cursor-pointer font-medium text-ink-800">Runtime and streaming details</summary>
           <div className="mt-3 space-y-2 text-xs">
             <p>Create one exporter per long-running application process; reuse it across calls. Flush/close belongs in controlled shutdown, not after every call. Check exporter diagnostics for rejected or unconfirmed events; delivery is not guaranteed across a process crash.</p>
             {language === 'node' && <p>Use your existing <code>requestOptions</code> object, or an empty object when you have no request options. Pass the same AbortSignal to the provider and helper when cancellation is possible.</p>}
@@ -149,10 +149,10 @@ function ManualProviderIntegration() {
       <p>After one real call, check the receipt and processing counts above, then open <Link to="/live" className="underline">captured activity</Link> and its run to verify tokens. Configure duration/error rules and Slack notifications below to turn a detected incident into an alert.</p>
       </div>
       {method === 'custom' && <p>Instrument completed calls from your existing provider client or framework. Sillage accepts the metadata contract below; an ingestion key alone does not capture calls automatically.</p>}
-      <details open={method === 'custom' ? true : undefined}><summary className="cursor-pointer font-medium text-slate-900">Advanced: Sillage JSON version 1 · Node fetch example</summary>
+      <details open={method === 'custom' ? true : undefined}><summary className="cursor-pointer font-medium text-ink-900">Advanced: Sillage JSON version 1 · Node fetch example</summary>
         <div className="mt-3 space-y-3"><p>Use this manual sender from your existing background telemetry queue or job. It does not create a queue. Replace identifiers and UTC times with one completed call's values. Each application retry attempt gets its own observation ID; retrying delivery keeps the same batch and event body.</p>
           <p>Use test_mode: true for a handshake and test_mode: false for real call metadata. HTTP 202 is durable receipt, not completed processing or monitoring readiness.</p>
-          <pre className="p-3 bg-slate-50 border rounded text-xs overflow-x-auto whitespace-pre-wrap break-words">{example}</pre>
+          <pre className="p-3 bg-ink-50 border rounded text-xs overflow-x-auto whitespace-pre-wrap break-words">{example}</pre>
           <p>Limit: 100 events and 256 KiB per batch; calls must start within the accepted 24-hour window. This raw JSON pattern can support other providers with explicit instrumentation.</p></div>
       </details>
   </section>;
@@ -165,7 +165,7 @@ function ProviderIntegration() {
       <Button aria-pressed={method === 'launcher'} variant={method === 'launcher' ? 'default' : 'outline'} onClick={() => setMethod('launcher')}>Python: install + run</Button>
       <Button aria-pressed={method === 'manual'} variant={method === 'manual' ? 'default' : 'outline'} onClick={() => setMethod('manual')}>Manual Python / Node</Button>
     </div>
-    <p className="text-xs text-slate-500">Use one integration method for each call. Combining a manual wrapper with automatic capture can count it twice.</p>
+    <p className="text-xs text-ink-500">Use one integration method for each call. Combining a manual wrapper with automatic capture can count it twice.</p>
     <div hidden={method !== 'launcher'}><PythonLauncherSetup /></div>
     <div hidden={method !== 'manual'}><ManualProviderIntegration /></div>
   </div>;
@@ -314,59 +314,59 @@ export default function DirectCaptureSetup({ capture, unavailable = false, refre
   const stepProps = (id) => ({ id, open: openSteps[id] || (id === 'keys' && !!revealed), toggle: () => toggleStep(id) });
 
   return <section aria-labelledby="direct-capture-title" className="space-y-5">
-    <Card className="border-slate-200 overflow-hidden"><CardHeader className="pb-3">
+    <Card className="border-ink-200 overflow-hidden"><CardHeader className="pb-3">
       <div className="flex flex-wrap items-center justify-between gap-3"><h2 id="direct-capture-title" className="font-semibold text-lg">Send events directly</h2>
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">Direct capture · {capture.project.environment}</span></div>
-      <p className="text-sm text-slate-600">{capture.project.name} · No Langfuse account needed</p>
-      <p className="text-sm text-slate-600">Data source: your application → Sillage. Langfuse is not used by this workspace.</p>
+        <span className="rounded-full bg-ink-100 px-3 py-1 text-xs font-medium text-ink-700">Direct capture · {capture.project.environment}</span></div>
+      <p className="text-sm text-ink-600">{capture.project.name} · No Langfuse account needed</p>
+      <p className="text-sm text-ink-600">Data source: your application → Sillage. Langfuse is not used by this workspace.</p>
     </CardHeader><CardContent className="space-y-5">
-      <div className={`rounded-lg p-4 ${connection.tone === 'teal' ? 'bg-teal-50 text-teal-950' : connection.tone === 'amber' ? 'bg-amber-50 text-amber-950' : 'bg-slate-50 text-slate-800'}`}>
+      <div className={`rounded-lg p-4 ${connection.tone === 'teal' ? 'bg-brick-50 text-brick-950' : connection.tone === 'amber' ? 'bg-ochre-50 text-ochre-950' : 'bg-ink-50 text-ink-800'}`}>
         <p className="font-semibold" data-testid="connection-status">{connection.label}</p><p className="mt-1 text-sm">{connection.detail}</p>
       </div>
-      <dl className="grid grid-cols-1 sm:grid-cols-3 gap-x-5 border-b border-slate-100 pb-3">
+      <dl className="grid grid-cols-1 sm:grid-cols-3 gap-x-5 border-b border-ink-100 pb-3">
         <Row label="Last app event received">{time(status.last_received_at)}</Row>
         <Row label="Waiting to process">{count(status.pending_events)}</Row>
         <Row label="Processing worker">{workerText}</Row>
       </dl>
       <ol aria-label="How application data reaches Sillage" className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-        <li><span className="text-xs font-medium uppercase tracking-wider text-slate-500">01 · Your application</span><p className="mt-1 font-medium text-slate-900">An instrumented model call</p><p className="mt-1 text-slate-600">The installed library sends timing, status and usage.</p></li>
-        <li><span className="text-xs font-medium uppercase tracking-wider text-slate-500">02 · Sillage collector</span><p className="mt-1 font-medium text-slate-900">Receipt is acknowledged</p><p className="mt-1 text-slate-600">Your app's ingestion key identifies this project.</p></li>
-        <li><span className="text-xs font-medium uppercase tracking-wider text-slate-500">03 · Your dashboard</span><p className="mt-1 font-medium text-slate-900">Calls, runs and incident checks</p><p className="mt-1 text-slate-600">A worker processes accepted events into measurements.</p></li>
+        <li><span className="text-xs font-medium uppercase tracking-wider text-ink-500">01 · Your application</span><p className="mt-1 font-medium text-ink-900">An instrumented model call</p><p className="mt-1 text-ink-600">The installed library sends timing, status and usage.</p></li>
+        <li><span className="text-xs font-medium uppercase tracking-wider text-ink-500">02 · Sillage collector</span><p className="mt-1 font-medium text-ink-900">Receipt is acknowledged</p><p className="mt-1 text-ink-600">Your app's ingestion key identifies this project.</p></li>
+        <li><span className="text-xs font-medium uppercase tracking-wider text-ink-500">03 · Your dashboard</span><p className="mt-1 font-medium text-ink-900">Calls, runs and incident checks</p><p className="mt-1 text-ink-600">A worker processes accepted events into measurements.</p></li>
       </ol>
-      <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
+      <div className="flex flex-wrap items-center gap-2 border-t border-ink-100 pt-4">
         <Button variant="outline" onClick={() => showStep(hasReceipt ? 'verify' : keyReady ? 'integrate' : 'keys')}>{hasReceipt ? 'Check processing' : keyReady ? 'Integrate your app' : 'Connect your first app'}</Button>
         <Button variant="ghost" onClick={() => showStep('keys')}>Manage keys</Button>
-        <span className="text-xs text-slate-500">{activeKeys === null ? 'Checking key status' : `${activeKeys} active ${activeKeys === 1 ? 'key' : 'keys'}`}</span>
+        <span className="text-xs text-ink-500">{activeKeys === null ? 'Checking key status' : `${activeKeys} active ${activeKeys === 1 ? 'key' : 'keys'}`}</span>
       </div>
     </CardContent></Card>
 
-    <div className="rounded-lg border border-slate-200 bg-white px-5 py-4 text-sm text-slate-600">
-      <p className="font-medium text-slate-900">Which key is this asking for?</p>
+    <div className="rounded-lg border border-ink-200 bg-card px-5 py-4 text-sm text-ink-600">
+      <p className="font-medium text-ink-900">Which key is this asking for?</p>
       <p className="mt-1">Your sign-in gives you access to the dashboard. An <strong>ingestion key</strong> lets your application send telemetry to this project. Create that key here; Sillage does not need your OpenAI or other provider API key.</p>
-      <details className="mt-3"><summary className="cursor-pointer text-xs font-medium text-slate-700">What data will appear?</summary>
+      <details className="mt-3"><summary className="cursor-pointer text-xs font-medium text-ink-700">What data will appear?</summary>
         <p className="mt-2 text-xs">Only metadata is accepted. Prompts, outputs, documents, customer identifiers and provider secrets are not accepted. Missing cost or usage remains unknown. This connection sends completed LLM-call metadata; it does not automatically discover your application or capture every RAG step. This collector is not an OTLP endpoint.</p>
       </details>
     </div>
 
     <SetupStep {...stepProps('keys')} number="1" title="Create an application key" description="Give your backend permission to send call metadata."
       state={unavailable || keys.error ? 'Unknown' : keyReady ? 'Key available' : 'Start here'}>
-      <h2 className="font-semibold text-base text-slate-900">Ingestion keys</h2>
-      <p className="mt-2 text-sm text-slate-600">Write-only keys belong to this project and cannot read Sillage data. Signing out does not revoke them.</p>
-      {!canManage && <p className="mt-2 text-sm text-slate-600">Only a current project owner can create or revoke ingestion keys. Members can inspect redacted status.</p>}
+      <h2 className="font-semibold text-base text-ink-900">Ingestion keys</h2>
+      <p className="mt-2 text-sm text-ink-600">Write-only keys belong to this project and cannot read Sillage data. Signing out does not revoke them.</p>
+      {!canManage && <p className="mt-2 text-sm text-ink-600">Only a current project owner can create or revoke ingestion keys. Members can inspect redacted status.</p>}
       {keys.loading && <p role="status" className="mt-3 text-sm">Loading ingestion key metadata...</p>}
-      {keys.error && <p role="alert" className="mt-3 text-sm text-amber-900">Ingestion key metadata is unavailable.{keys.data && ' Showing the last successful list; current key status is unknown.'}</p>}
+      {keys.error && <p role="alert" className="mt-3 text-sm text-ochre-900">Ingestion key metadata is unavailable.{keys.data && ' Showing the last successful list; current key status is unknown.'}</p>}
       <Button className="mt-3" variant="outline" onClick={keys.reload} disabled={keys.loading || keys.refreshing}>Refresh key list</Button>
-      {message && <p role="status" className="mt-3 text-sm text-amber-900">{message}</p>}
+      {message && <p role="status" className="mt-3 text-sm text-ochre-900">{message}</p>}
       {canManage && !revealed && <form onSubmit={create} className="mt-4 space-y-3 max-w-lg">
         <div><label htmlFor="ingestion-label" className="block text-sm mb-1">Key label</label>
           <Input id="ingestion-label" value={label} onChange={(event) => setLabel(event.target.value)} maxLength={80} disabled={!!busy} placeholder="production-backend" /></div>
         <div><label htmlFor="ingestion-days" className="block text-sm mb-1">Expires in days (1–90)</label>
           <Input id="ingestion-days" type="number" min="1" max="90" step="1" value={days} onChange={(event) => setDays(event.target.value)} disabled={!!busy} /></div>
-        {uncertainCreate && <div className="text-sm text-amber-900"><p>After reviewing and revoking any unrecoverable key, you can start a new creation request.</p>
+        {uncertainCreate && <div className="text-sm text-ochre-900"><p>After reviewing and revoking any unrecoverable key, you can start a new creation request.</p>
           <Button className="mt-2" variant="outline" type="button" disabled={!recoveryReady || keys.loading || keys.refreshing || !!keys.error || !!busy} onClick={() => { setUncertainCreate(false); failedSequence.current = null; setMessage(''); }}>I reviewed the key list</Button></div>}
         <Button type="submit" disabled={!!busy || !label.trim() || !Number.isInteger(Number(days)) || Number(days) < 1 || Number(days) > 90 || uncertainCreate || keys.loading || !!keys.error}>{busy === 'create' ? 'Creating key...' : 'Create ingestion key'}</Button>
       </form>}
-      {revealed && <div className="mt-4 border border-amber-300 bg-amber-50 rounded-md p-4 space-y-3">
+      {revealed && <div className="mt-4 border border-ochre-300 bg-ochre-50 rounded-md p-4 space-y-3">
         <h3 className="font-semibold text-sm">Copy this key now</h3>
         <p className="text-sm">Shown once. Copy before leaving this page or switching away from the browser; session revalidation clears the display. Keep it in your application server secret configuration. Sending a test is optional.</p>
         <label htmlFor="one-time-ingestion-key" className="text-sm block">One-time ingestion key</label>
@@ -378,7 +378,7 @@ export default function DirectCaptureSetup({ capture, unavailable = false, refre
         <Button variant="outline" onClick={() => showStep('integrate')}>Continue to install</Button>
       </div>}
       {!keys.loading && keys.data && <div className="mt-4 space-y-3">
-        {keys.data.length === 0 && !revealed && <p className="text-sm text-slate-600">{keys.error ? 'The previous list contained no keys; current status is unknown.' : 'No ingestion keys have been created.'}</p>}
+        {keys.data.length === 0 && !revealed && <p className="text-sm text-ink-600">{keys.error ? 'The previous list contained no keys; current status is unknown.' : 'No ingestion keys have been created.'}</p>}
         {keys.data.map((credential) => <div key={credential.id} className="rounded-md border p-3">
           <div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><p className="font-medium text-sm break-words">{credential.label}</p>
             <p className="font-mono text-xs mt-1">{credential.prefix} · {credential.status}</p></div>
@@ -387,7 +387,7 @@ export default function DirectCaptureSetup({ capture, unavailable = false, refre
             <Row label="Last used">{time(credential.last_used_at)}</Row><Row label="Revoked">{time(credential.revoked_at)}</Row></dl>
         </div>)}
       </div>}
-      <details className="mt-4 text-xs text-slate-600"><summary className="cursor-pointer font-medium text-slate-700">Rotate a key or disconnect an application</summary>
+      <details className="mt-4 text-xs text-ink-600"><summary className="cursor-pointer font-medium text-ink-700">Rotate a key or disconnect an application</summary>
         <p className="mt-2">To rotate a key, create a replacement, update the application's server secret and verify a real receipt before revoking the old key. To stop new telemetry, stop the exporter or revoke every key used by that application. Revoking a key keeps already accepted data and does not delete project history.</p>
         <p className="mt-2">Expired keys must be replaced. Revoked keys cannot be restored. At most 10 active and 100 retained keys are allowed; use one descriptive label per backend or environment.</p>
       </details>
@@ -400,7 +400,7 @@ export default function DirectCaptureSetup({ capture, unavailable = false, refre
 
     <SetupStep {...stepProps('verify')} number="3" title="Verify your first real call" description="Follow one app call from receipt to its captured run."
       state={unavailable ? 'Unknown' : hasProcessed ? 'Processing observed' : hasReceipt ? 'Received' : 'Awaiting app call'}>
-      <div className="space-y-4 text-sm text-slate-600">
+      <div className="space-y-4 text-sm text-ink-600">
         <p>Run one workflow in your application with capture enabled. Confirm a new receipt below, then open its run in captured activity and check the model, duration and token usage.</p>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-5">
           <Row label="Latest real event receipt">{time(status.last_received_at)}</Row>
@@ -417,9 +417,9 @@ export default function DirectCaptureSetup({ capture, unavailable = false, refre
             : status.received_events === 0 ? <p>No real event receipt is recorded. A successful test alone does not establish application traffic.</p>
               : <p>Receipt timing is unknown. Counts alone do not establish current application traffic.</p>}
         <div className="flex flex-wrap items-center gap-4"><Button variant="outline" onClick={refreshCapture}>Refresh receipt and processing</Button>
-          <Link to="/live" className="underline underline-offset-4 text-teal-800">Open captured activity</Link>
-          <Link to="/" className="underline underline-offset-4 text-teal-800">Open overview</Link></div>
-        <details><summary className="cursor-pointer font-medium text-slate-800">I sent a call, but I don't see it</summary>
+          <Link to="/live" className="underline underline-offset-4 text-brick-800">Open captured activity</Link>
+          <Link to="/" className="underline underline-offset-4 text-brick-800">Open overview</Link></div>
+        <details><summary className="cursor-pointer font-medium text-ink-800">I sent a call, but I don't see it</summary>
           <ol className="mt-3 list-decimal space-y-2 pl-5">
             <li>No receipt: check this deployment's URL, the server's ingestion key and exporter diagnostics. Verify the request was sent with test mode off.</li>
             <li>Receipt but pending processing: check that the worker is reporting and the pending count decreases.</li>
@@ -432,7 +432,7 @@ export default function DirectCaptureSetup({ capture, unavailable = false, refre
 
     <SetupStep {...stepProps('test')} number="?" title="Optional: test your key" description="Check the collector separately from a real application call."
       state={unavailable ? 'Unknown' : status.last_test_received_at ? 'Test received' : 'Awaiting test'}>
-      <div className="space-y-3 text-sm text-slate-600">
+      <div className="space-y-3 text-sm text-ink-600">
         <p>A test sends one empty metadata event. It checks the ingestion key and collector, and creates no production observations, totals or incidents.</p>
         <dl><Row label="Latest test receipt">{time(status.last_test_received_at)}</Row></dl>
         {revealed ? <><p>Use <strong>Send test event</strong> beside your newly created key. Do this before switching away from the browser.</p>

@@ -7,6 +7,7 @@ jest.mock('@/pages/PublicAccess', () => ({
   __esModule: true,
   default: ({ intent }) => <main data-public-intent={intent}>Public registration boundary</main>,
   PrivacyNotice: () => <main data-public-privacy>Registration privacy</main>,
+  WaitlistPage: ({ confirmed }) => <main data-public-waitlist data-confirmed={String(confirmed)}>Waitlist route</main>,
 }));
 jest.mock('@/services/guardianApi', () => ({
   ...jest.requireActual('@/services/guardianApi'),
@@ -59,6 +60,26 @@ test('public privacy notice is available before consent and authentication', asy
   await renderAt('/privacy');
   expect(container.querySelector('[data-public-privacy]')).not.toBeNull();
   privateStateUntouched();
+});
+
+test.each(['/waitlist', '/waitlist?registered=true', '/waitlist#confirmed'])(
+  'direct %s never treats the address or history state as proof of a registration', async path => {
+    window.history.replaceState({ registered: true, confirmed: true }, '', path);
+    await act(async () => root.render(<App />));
+    const page = container.querySelector('[data-public-waitlist]');
+    expect(page).not.toBeNull();
+    expect(page.getAttribute('data-confirmed')).toBe('false');
+    privateStateUntouched();
+  });
+
+test('the public waitlist does not introduce an unauthenticated workspace-mode route', async () => {
+  process.env.REACT_APP_PUBLIC_SITE = 'false';
+  localStorage.clear();
+  guardianApi.getAuthConfig.mockResolvedValue({ data: { auth_mode: 'api_key', login_path: null } });
+  await renderAt('/waitlist');
+  expect(guardianApi.getAuthConfig).toHaveBeenCalledTimes(1);
+  expect(container.querySelector('[data-public-waitlist]')).toBeNull();
+  expect(container.textContent).toContain('Workspace access key');
 });
 
 test('unknown public routes do not accidentally mount a private dashboard', async () => {

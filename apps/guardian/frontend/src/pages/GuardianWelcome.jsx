@@ -1,6 +1,10 @@
 import { useState } from 'react';
-import { ArrowRight, ArrowUpRight, Check, ChevronRight, CircleDot, Code2, Layers3, Play, Radio, ShieldCheck } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUpRight, CircleDot, Code2, Play, ShieldCheck } from 'lucide-react';
+import { GuardianWordmark } from '@/components/SillageBrand';
 import '@/product.css';
+import '@/landing.css';
+
+export { GuardianWordmark } from '@/components/SillageBrand';
 
 export const SAMPLE_RUNS = Object.freeze([
   { id: 'support', name: 'Support answer', state: 'Slow call', outcome: 'An answer took longer than the saved rule allows.', calls: [
@@ -18,14 +22,10 @@ export const SAMPLE_RUNS = Object.freeze([
   ] },
 ]);
 
-export function GuardianWordmark({ light = false }) {
-  return <span className={`cg-wordmark ${light ? 'cg-wordmark-light' : ''}`}><span className="cg-mark" aria-hidden="true"><Layers3 size={19} strokeWidth={1.8} /></span><span className="cg-wordmark-weight">sillage<span className="cg-wordmark-dot">.</span></span></span>;
-}
-
 const formatCost = value => value === null ? 'Unknown' : `$${value.toFixed(5)}`;
 const formatTime = value => value < 1000 ? `${value} ms` : `${(value / 1000).toFixed(2)} s`;
 
-export function SampleTrace({ compact = false }) {
+export function SampleTrace({ compact = false, publicSite = false }) {
   const [runId, setRunId] = useState('support');
   const [callIndex, setCallIndex] = useState(1);
   const [view, setView] = useState('trace');
@@ -47,20 +47,64 @@ export function SampleTrace({ compact = false }) {
         <div className="cg-call-detail" aria-label="Sample trace detail" aria-live="polite"><div className="cg-detail-head"><span className="cg-eyebrow">SELECTED CALL</span><span className={`cg-state ${call.state === 'Completed' ? '' : 'cg-state-attention'}`}>{call.state}</span></div><h3>{call.name}</h3><p className="cg-model">{call.model}</p><dl><div><dt>Duration</dt><dd>{formatTime(call.ms)}</dd></div><div><dt>Input / output tokens</dt><dd>{call.input === null ? 'Unknown' : `${call.input.toLocaleString()} / ${call.output.toLocaleString()}`}</dd></div><div><dt>Reported cost</dt><dd>{formatCost(call.cost)}</dd></div></dl><p className="cg-detail-note">{call.state === 'Slow call' ? '3.42 s exceeds the sample rule of 2.00 s. The recorded rule explains the incident.' : call.state === 'Reported error' ? 'The app reported a failure. No usage or price was supplied for this call.' : 'A completed call with known measurements. No sample rule was exceeded.'}</p>{call.state !== 'Completed' && <button className="cg-text-action" onClick={() => setView('incident')}>Inspect incident <ArrowUpRight size={14} /></button>}</div>
       </div> : <div className="cg-demo-incident" aria-live="polite"><span className="cg-eyebrow">SAMPLE INVESTIGATION</span><h3>{run.state === 'Completed' ? 'No incident for these calls' : resolved ? 'Sample incident resolved' : run.state === 'Slow call' ? 'Draft answer exceeded its duration limit' : 'Specialist call reported an error'}</h3><p>{run.outcome}</p><div className="cg-investigation-steps"><span><b>01</b> Inspect the captured measurement</span><span><b>02</b> Compare it with the saved rule</span><span><b>03</b> Record the resolution</span></div>{run.state !== 'Completed' && <button className="cg-button-primary" onClick={() => setResolved(true)} disabled={resolved}>{resolved ? 'Resolved in this demo' : 'Mark demo incident resolved'}</button>}<button className="cg-text-action" onClick={() => setView('trace')}>Back to trace <ArrowRight size={14} /></button><p className="cg-detail-note">Demo changes last only while this page is open. Resolution records an action; it does not fix the application.</p></div>}
     </div>
-    <div className="cg-sample-footer"><span><ShieldCheck size={14} />Illustrative measurements. No customer data.</span><a href="/setup">Connect your app <ArrowRight size={14} /></a></div>
+    <div className="cg-sample-footer"><span><ShieldCheck size={14} />Illustrative measurements. No customer data.</span><a href={publicSite ? '/signup' : '/setup'}>{publicSite ? 'Sign up' : 'Start tracking'} <ArrowRight size={14} /></a></div>
   </section>;
 }
 
 export default function GuardianWelcome({ demo = false, publicSite = false }) {
-  return <div className="cg-public">
-    <header className="cg-public-header"><a href="/welcome" aria-label="Sillage home"><GuardianWordmark /></a><nav aria-label="Public navigation"><a href="/welcome#how-it-works">How it works</a><a href="/demo" aria-current={demo ? 'page' : undefined}>Interactive demo</a>{publicSite && <a href="/signup">Join early access</a>}<a href="/signin">Sign in <ArrowUpRight size={14} /></a></nav><a className="cg-button-primary cg-header-cta" href={publicSite ? '/signup' : '/setup'}>{publicSite ? 'Join early access' : 'Connect your app'} <ArrowRight size={15} /></a></header>
-    <main>
-      {demo ? <section className="cg-demo-heading"><p className="cg-eyebrow">EXPLORE BEFORE YOU CONNECT</p><h1>Your first investigation.<br /><em>No setup required.</em></h1><p>Switch runs, select a call, inspect a rule and try a resolution. This sample workspace stays separate from your application.</p></section> : <section className="cg-hero"><div className="cg-hero-copy"><p className="cg-eyebrow"><span className="cg-status-dot cg-good" /> BUILT FOR TEAMS SHIPPING AI</p><h1>See what your<br />AI is <em>doing.</em></h1><p className="cg-hero-description">Follow your model calls. Understand token usage, reported spend and failures. Get from “something feels off” to the call that explains it.</p><div className="cg-hero-actions"><a className="cg-button-primary" href="/setup">Connect your app <ArrowRight size={17} /></a><a className="cg-button-secondary" href="/demo"><Play size={14} /> Explore the demo</a></div><p className="cg-hero-footnote">Python + Node helpers · Existing Langfuse support<br />Your model-provider key stays with your application.</p></div><div className="cg-hero-aside"><div className="cg-aside-rule"><span>FROM A CALL TO AN ANSWER</span><span>↓</span></div><div className="cg-hero-measurement"><span>Duration limit exceeded</span><strong>3.42<span>s</span></strong><p>One model call crossed its 2 s rule.<br />Now you know where to look.</p></div><div className="cg-aside-bottom"><Radio size={19} /><span>Capture → understand → investigate</span></div></div></section>}
-      <div className={demo ? 'cg-demo-workspace' : 'cg-landing-workspace'}><SampleTrace compact={!demo} /></div>
-      <section className="cg-how" id="how-it-works"><div><p className="cg-eyebrow">KNOW WHERE THE DATA COMES FROM</p><h2>Your app makes the call.<br /><em>Sillage makes it visible.</em></h2></div><div className="cg-how-steps"><article><span className="cg-step-number">01</span><h3>Connect the source</h3><p>Install the Python package and start your app with sillage-run, or use the manual Node integration. Already use Langfuse? Use its configured source workspace.</p></article><article><span className="cg-step-number">02</span><h3>Check a real call</h3><p>Run a normal app workflow. See received events, processing progress and the measurements that actually arrived. A connection test is optional.</p></article><article><span className="cg-step-number">03</span><h3>Follow the evidence</h3><p>Set call-level rules. Open an incident, inspect the observed run and record a resolution. Optionally route new incidents to Slack.</p></article></div></section>
-      <section className="cg-boundaries"><div><span className="cg-eyebrow">WHAT YOU CAN SEE</span><h2>Useful measurements.<br />Clear limits.</h2><p>Direct capture records technical call labels, status, timing, tokens and any cost you explicitly report. Unknown values stay visible.</p></div><div className="cg-coverage-list">{['Call and model timelines', 'Input, output and total token usage', 'Reported cost with missing-data coverage', 'Saved rules and incident evidence'].map(item => <p key={item}><Check size={15} />{item}</p>)}<p className="cg-coverage-note">Direct capture does not collect raw prompts, responses or retrieved documents. The Python launcher and OpenAI helpers do not estimate USD prices. Full RAG tracing and self-service workspace provisioning are still in progress.</p></div></section>
-      <section className="cg-start"><div><p className="cg-eyebrow">FROM EXPLORING TO OBSERVING</p><h2>{publicSite ? 'Help shape what comes next.' : 'Connect your first application.'}</h2><p>{publicSite ? <>Tell us what you're building and register your interest.<br />We'll keep you posted about early access.</> : <>Have workspace access? Sign in and follow the connection guide.<br />New to this deployment? Your workspace owner sets up your access.</>}</p></div><a className="cg-button-primary" href={publicSite ? '/signup' : '/setup'}>{publicSite ? 'Register your interest' : 'Start connecting'} <ChevronRight size={17} /></a></section>
+  const startUrl = publicSite ? '/signup' : '/setup';
+  const startLabel = publicSite ? 'Sign up' : 'Start tracking';
+  return <div className="sg-landing">
+    <a className="sg-landing-skip" href="#main-content">Skip to content</a>
+    <header className="sg-landing-header sg-landing-shell">
+      <a className="sg-landing-brand" href={publicSite ? '/' : '/welcome'} aria-label="Sillage home"><GuardianWordmark /></a>
+      <nav className="sg-landing-nav" aria-label="Public navigation">
+        <a href="/welcome#how-it-works">How it works</a>
+        <a href="/demo" aria-current={demo ? 'page' : undefined}>Interactive demo</a>
+        <a href="/signin">Sign in <ArrowUpRight size={13} aria-hidden="true" /></a>
+      </nav>
+      <a className="sg-landing-button sg-landing-header-action" href={startUrl}>{startLabel}<ArrowRight size={15} aria-hidden="true" /></a>
+    </header>
+    <main id="main-content" className="sg-landing-shell">
+      <section className={`sg-landing-intro ${demo ? 'sg-landing-intro-demo' : ''}`} aria-labelledby="landing-heading">
+        <div>
+          <p className="sg-landing-kicker">{demo ? 'THE SAMPLE WORKSPACE' : 'CLARITY FOR TEAMS BUILDING WITH AI'}</p>
+          <h1 id="landing-heading">{demo ? <>Follow a call.<br /><em>Find the cause.</em></> : <>See the calls<br /><em>behind the answer.</em></>}</h1>
+        </div>
+        <div className="sg-landing-intro-note">
+          <p>{demo ? 'A slow answer. A failed handoff. Start with a question, follow a call and inspect the evidence behind an incident.' : 'Understand where your application slows down, what each model call uses, and which failures need attention.'}</p>
+          {demo ? <a className="sg-landing-text-link" href="#investigation">Try the investigation <ArrowDown size={16} aria-hidden="true" /></a> : <div className="sg-landing-actions"><a className="sg-landing-button" href={startUrl}>{startLabel}<ArrowRight size={17} aria-hidden="true" /></a><a className="sg-landing-text-link" href="/demo"><Play size={13} aria-hidden="true" /> Explore the demo</a></div>}
+          <p className="sg-landing-fineprint">{demo ? 'No account or application connection needed. Every measurement below is illustrative.' : 'Your application makes the calls. Your model-provider key stays with your application.'}</p>
+        </div>
+      </section>
+
+      <section id="investigation" className="sg-landing-investigation" aria-labelledby="investigation-heading">
+        <div className="sg-landing-section-line"><span>01 / FOLLOW THE EVIDENCE</span><span>INTERACTIVE EXAMPLE <ArrowDown size={13} aria-hidden="true" /></span></div>
+        <div className="sg-landing-investigation-intro"><h2 id="investigation-heading">An answer felt slow.<br /><em>Where did the time go?</em></h2><p>Select a run, then a call. Compare its measurements with the saved rule and try recording a resolution.</p></div>
+        <SampleTrace compact={!demo} publicSite={publicSite} />
+        <p className="sg-landing-margin-note">A resolution records your investigation. It does not fix the application or prove the whole workflow succeeded.</p>
+      </section>
+
+      <section id="how-it-works" className="sg-landing-workflow" aria-labelledby="workflow-heading">
+        <div className="sg-landing-section-caption"><p className="sg-landing-kicker">02 / FROM YOUR APPLICATION</p><h2 id="workflow-heading">Keep building.<br /><em>Stay close to the details.</em></h2><p>Start with a supported source. Verify a real call. Build your understanding from what actually arrived.</p></div>
+        <ol className="sg-landing-steps">
+          <li><span aria-hidden="true">01</span><div><h3>Connect the way you work.</h3><p>Start your Python app with <code>sillage-run</code>, attach to existing OpenTelemetry, or use a configured Langfuse source. A manual Node integration is also available.</p></div></li>
+          <li><span aria-hidden="true">02</span><div><h3>Follow a real call through.</h3><p>Run your application normally. Check receipt and processing, then inspect the captured timing, token usage and reported cost.</p></div></li>
+          <li><span aria-hidden="true">03</span><div><h3>Turn a signal into an investigation.</h3><p>Set call-level rules, inspect the incident and its observed run, and record a resolution. Optional Slack delivery brings new incidents to your team.</p></div></li>
+        </ol>
+      </section>
+
+      <section className="sg-landing-evidence" aria-labelledby="evidence-heading">
+        <div className="sg-landing-section-caption"><p className="sg-landing-kicker">03 / KNOW WHAT YOU KNOW</p><h2 id="evidence-heading">Useful evidence.<br /><em>Honest boundaries.</em></h2></div>
+        <div className="sg-landing-evidence-body"><dl className="sg-landing-ledger">
+          <div><dt>Time</dt><dd>Call duration and latency, with missing measurements visible.</dd></div>
+          <div><dt>Usage &amp; spend</dt><dd>Token counts and reported cost. Unknown values stay unknown.</dd></div>
+          <div><dt>Failures</dt><dd>Reported errors, saved rules and the evidence behind an incident.</dd></div>
+        </dl><p className="sg-landing-boundary-note"><ShieldCheck size={17} aria-hidden="true" /><span>Direct capture does not collect raw prompts, responses or retrieved documents. The Python launcher does not estimate USD prices. Full RAG tracing and self-service workspace provisioning are still in progress.</span></p></div>
+      </section>
+
+      <section className="sg-landing-start" aria-labelledby="start-heading"><div><p className="sg-landing-kicker">YOUR APPLICATION, IN VIEW</p><h2 id="start-heading">Make the next investigation clearer.</h2><p>{publicSite ? 'Sign up to register your details, or sign in to an existing workspace.' : 'Sign in to your workspace, connect a source and follow your first real call.'}</p></div><a className="sg-landing-button" href={startUrl}>{startLabel}<ArrowRight size={18} aria-hidden="true" /></a></section>
     </main>
-    <footer className="cg-public-footer"><GuardianWordmark /><span>The wake your AI leaves behind. Evidence you can inspect.</span>{publicSite && <a href="/privacy">Registration privacy</a>}<a href="/signin">Open your workspace <ArrowUpRight size={14} /></a></footer>
+    <footer className="sg-landing-footer sg-landing-shell"><a href={publicSite ? '/' : '/welcome'} aria-label="Sillage home"><GuardianWordmark /></a><p>The wake your AI leaves behind.</p><nav aria-label="Footer navigation">{publicSite && <a href="/privacy">Privacy</a>}<a href="/signin">Sign in <ArrowUpRight size={13} aria-hidden="true" /></a></nav></footer>
   </div>;
 }

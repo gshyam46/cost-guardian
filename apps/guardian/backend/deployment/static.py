@@ -18,7 +18,9 @@ _ASSET = re.compile(r"/static/(?:js|css|media)/[A-Za-z0-9_-][A-Za-z0-9_.-]*\.[0-
 _MAP = re.compile(r"/static/(?:js|css)/[A-Za-z0-9_-][A-Za-z0-9_.-]*\.[0-9a-f]{8,64}\.(?:js|css)\.map\Z")
 _DETAIL = re.compile(r"/(?:incidents|runs)/[A-Za-z0-9_.:-]{1,128}\Z")
 _SHELL = frozenset({"/", "/welcome", "/demo", "/signin", "/setup", "/live", "/incidents"})
-_PUBLIC = {"/favicon.ico": "image/x-icon", "/manifest.json": "application/manifest+json", "/robots.txt": "text/plain"}
+_PUBLIC = {"/favicon.ico": "image/x-icon", "/favicon.svg": "image/svg+xml",
+           "/apple-touch-icon.png": "image/png", "/manifest.json": "application/manifest+json",
+           "/InstrumentSerif-OFL.txt": "text/plain", "/Manrope-OFL.txt": "text/plain", "/robots.txt": "text/plain"}
 _MIME = {".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png",
          ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp",
          ".ico": "image/x-icon", ".woff": "font/woff", ".woff2": "font/woff2", ".ttf": "font/ttf"}
@@ -119,6 +121,16 @@ def validate_static_directory(directory):
             if total > MAX_BUILD_BYTES or not data:
                 raise ValueError()
             assets[url] = StaticAsset(data, mime, immutable)
+        # CRA copies named public files separately from Webpack's asset manifest.
+        # Snapshot only this fixed brand/license allowlist, never the directory.
+        for url, mime in _PUBLIC.items():
+            if url in assets or not (root / url[1:]).exists():
+                continue
+            data = _read(root, url[1:], MAX_METADATA_BYTES)
+            total += len(data)
+            if total > MAX_BUILD_BYTES or not data:
+                raise ValueError()
+            assets[url] = StaticAsset(data, mime, False)
         entries = manifest["entrypoints"]
         if (any(type(entry) is not str or not entry.startswith("static/") or "/" + entry not in assets for entry in entries)
                 or len(set(entries)) != len(entries) or not any(entry.endswith(".js") for entry in entries)):

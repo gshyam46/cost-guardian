@@ -77,9 +77,10 @@ async function main(argv) {
         if (availability === 'hanging') return new Promise(() => {});
         return availability === 'ready';
       } });
-    const publicPaths = new Set(['/', '/welcome', '/demo', '/signin', '/setup', '/signup', '/privacy']);
+    const publicPaths = new Set(['/', '/welcome', '/demo', '/signin', '/setup', '/signup', '/privacy', '/waitlist']);
     const assetPaths = new Set(Object.values(manifest.files).map(value => new URL(value, 'http://fixture.test').pathname));
-    const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.ico': 'image/x-icon' };
+    for (const name of ['favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'manifest.json', 'InstrumentSerif-OFL.txt', 'Manrope-OFL.txt']) assetPaths.add('/' + name);
+    const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.txt': 'text/plain' };
     server = http.createServer(async (req, res) => {
       const pathname = new URL(req.url, origin).pathname;
       if (pathname.startsWith('/api/')) requests.push({ pathname, authorization: !!req.headers.authorization, cookie: !!req.headers.cookie });
@@ -109,8 +110,17 @@ async function main(argv) {
     page.setDefaultTimeout(12000);
     page.on('pageerror', () => errors.push(true));
     await page.goto(origin);
-    await page.getByRole('heading', { name: 'See what your AI is doing.', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'See the calls behind the answer.', exact: true }).waitFor();
+    await page.evaluate(() => document.fonts.ready);
+    check(await page.evaluate(() => document.fonts.check('16px Manrope') && document.fonts.check('40px "Instrument Serif"')), 'local_fonts_not_ready');
+    check(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--sillage-paper').trim().toLowerCase()) === '#f6f0e6', 'cream_palette_missing');
+    check((await context.request.get(origin + '/favicon.svg')).headers()['content-type'].startsWith('image/svg+xml'), 'brand_favicon_missing');
+    check((await context.request.get(origin + '/apple-touch-icon.png')).status() === 200, 'touch_icon_missing');
     await page.screenshot({ path: path.join(reportDir, 'landing-desktop.png'), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'mobile_landing_overflow');
+    await page.screenshot({ path: path.join(reportDir, 'landing-mobile.png'), fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 960 });
     await page.goto(origin + '/demo');
     await page.getByRole('heading', { name: 'A slow answer, explained.', exact: true }).waitFor();
     check(requests.length === 0, 'public_demo_requested_private_api');
@@ -118,7 +128,7 @@ async function main(argv) {
 
     phase = 'availability_browser';
     await page.goto(origin + '/signin');
-    await page.getByRole('heading', { name: 'Early access is coming soon', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'Sign-in is coming soon', exact: true }).waitFor();
     check(probes === 0, 'unconfigured_workspace_was_probed');
     await page.screenshot({ path: path.join(reportDir, 'coming-soon-desktop.png'), fullPage: true });
     availability = 'down';
@@ -135,7 +145,7 @@ async function main(argv) {
     check(await page.getByRole('link', { name: 'Sign in to your workspace', exact: true }).getAttribute('href') === 'https://workspace.example.test/signin', 'signin_link_invalid');
     await page.goto(origin + '/setup');
     await page.getByRole('heading', { name: 'Your workspace is ready.', exact: true }).waitFor();
-    check(await page.getByRole('link', { name: 'Connect your application', exact: true }).getAttribute('href') === 'https://workspace.example.test/setup', 'onboarding_link_invalid');
+    check(await page.getByRole('link', { name: 'Sign in and connect', exact: true }).getAttribute('href') === 'https://workspace.example.test/setup', 'onboarding_link_invalid');
     passed('unconfigured_down_hanging_recovered_workspace_and_explicit_links');
 
     phase = 'browser_registration';
@@ -148,38 +158,51 @@ async function main(argv) {
     const fill = async (email, company = 'Synthetic Company') => {
       await page.getByLabel('Your name', { exact: false }).fill('Synthetic Founder');
       await page.getByLabel('Email', { exact: false }).fill(email);
+      await page.locator('summary').filter({ hasText: 'Add company or project details' }).click();
       await page.getByLabel('Company', { exact: false }).fill(company);
       await page.getByLabel('What are you building?', { exact: false }).fill('Synthetic acceptance test. No real customer data.');
       await page.getByRole('checkbox').check();
     };
     const firstEmail = 'synthetic-founder@example.test';
     await fill(firstEmail, '=SYNTHETIC()');
-    await page.getByRole('button', { name: 'Register interest', exact: true }).click();
-    await page.getByRole('heading', { name: 'Interest registered', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Register', exact: true }).click();
+    await page.getByRole('heading', { name: 'You’re on the list.', exact: true }).waitFor();
+    await page.waitForURL(origin + '/waitlist');
+    check(await page.getByLabel('Your name', { exact: false }).count() === 0, 'saved_registration_retained_form');
     const contact = await db.collection(COLLECTIONS.contacts).findOne({ _id: firstEmail });
     check(contact?.source === 'onboarding' && contact.verified === false && contact.consent.accepted === true
       && contact.consent.version && contact.expiresAt - contact.createdAt === 180 * 86400000, 'persistent_contact_contract_invalid');
     await page.screenshot({ path: path.join(reportDir, 'registered-mobile.png'), fullPage: true });
     passed('backend_down_registration_committed_with_consent_and_retention');
 
+    phase = 'waitlist_confirmation_boundary';
+    await page.reload();
+    await page.getByRole('heading', { name: 'Find your way into Sillage.', exact: true }).waitFor();
+    check(await page.getByRole('heading', { name: 'You’re on the list.', exact: true }).count() === 0, 'waitlist_reload_claimed_registration');
+    await page.goto(origin + '/waitlist?registered=true');
+    await page.getByRole('heading', { name: 'Find your way into Sillage.', exact: true }).waitFor();
+    check(!(await page.locator('body').innerText()).includes('REGISTRATION RECEIVED'), 'waitlist_query_claimed_registration');
+    await page.getByRole('heading', { name: 'Workspace sign-in is currently unavailable.', exact: true }).waitFor();
+    passed('waitlist_only_confirms_actual_ack_not_reload_or_query');
+
     phase = 'registration_failure_retry';
     ip = '203.0.113.2';
     const beforeSignupProbes = probes;
     await page.goto(origin + '/signup');
-    await page.getByRole('heading', { name: 'Get early access to Sillage.', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'A clearer view of your AI.', exact: true }).waitFor();
     check(probes === beforeSignupProbes, 'signup_depends_on_backend_probe');
     const retryEmail = 'synthetic-retry@example.test';
     await fill(retryEmail);
     failStore = true;
-    await page.getByRole('button', { name: 'Register interest', exact: true }).click();
+    await page.getByRole('button', { name: 'Register', exact: true }).click();
     await page.getByRole('alert').waitFor();
     check((await page.getByRole('alert').innerText()).includes('could not confirm'), 'storage_failure_missing');
     check(await page.getByLabel('Email', { exact: false }).inputValue() === retryEmail, 'failed_submission_lost_input');
-    check(await page.getByRole('heading', { name: 'Interest registered', exact: true }).count() === 0, 'failed_write_claimed_saved');
+    check(await page.getByRole('heading', { name: 'You’re on the list.', exact: true }).count() === 0 && page.url() === origin + '/signup', 'failed_write_claimed_saved');
     check(await db.collection(COLLECTIONS.contacts).countDocuments({ _id: retryEmail }) === 0, 'failed_write_created_contact');
     failStore = false;
-    await page.getByRole('button', { name: 'Register interest', exact: true }).click();
-    await page.getByRole('heading', { name: 'Interest registered', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Register', exact: true }).click();
+    await page.getByRole('heading', { name: 'You’re on the list.', exact: true }).waitFor();
     passed('actual_http_storage_failure_retains_input_and_retry_saves');
 
     phase = 'duplicate_persistence';
@@ -231,7 +254,7 @@ async function main(argv) {
 
     phase = 'public_privacy_and_isolation';
     await page.goto(origin + '/privacy');
-    await page.getByRole('heading', { name: 'Early-access privacy notice', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'Registration & privacy.', exact: true }).waitFor();
     check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'mobile_privacy_overflow');
     check(!errors.length && !blocked.length, 'browser_runtime_error_or_external_request');
     check(requests.every(request => ['/api/interest', '/api/availability'].includes(request.pathname)

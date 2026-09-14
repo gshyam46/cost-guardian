@@ -9,20 +9,16 @@ import { isKnown, money, duration, count } from '@/lib/liveFormat';
  * MiniChart is that these carry a hover layer -- an HTML chart is interactive by
  * nature, and a bar the user cannot interrogate is throwing away the medium.
  *
- * Colour: the five agent slots below are the first five categorical hues of the
- * validated reference palette, in fixed order. Three of them sit under 3:1 against a
- * light surface, so every bar here ships a visible direct label -- the documented
- * relief for that, and the reason no value in this file is encoded by colour alone.
- * Colour follows the agent, never its rank, so filtering the set never repaints the
- * survivors.
+ * Warm categorical colors accompany direct labels; values never rely on color
+ * alone. The same agent keeps its color across the page when a view is filtered.
  */
 
-export const SERIES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4'];
+export const SERIES = ['#A64232', '#B98138', '#8C7464', '#4E4036', '#747B53'];
 
 export const STATUS = {
-  good: '#0ca30c',
-  warning: '#fab219',
-  critical: '#d03b3b',
+  good: '#637044',
+  warning: '#9B6A2F',
+  critical: '#A64232',
 };
 
 /** Stable colour per name, so an agent keeps its hue across every chart on the page. */
@@ -32,7 +28,7 @@ export const colorFor = (name, names) => {
 };
 
 const Empty = ({ label }) => (
-  <div className="h-32 flex items-center justify-center text-xs text-slate-400">
+  <div className="h-32 flex items-center justify-center text-xs text-ink-400">
     No {label} yet
   </div>
 );
@@ -58,25 +54,24 @@ export const BarList = ({ rows, valueKey, format, label, names }) => {
         return (
           <div
             key={row.name}
-            className="group cursor-default"
+            className="cg-chart-row group cursor-default"
             onMouseEnter={() => setHovered(row.name)}
             onMouseLeave={() => setHovered(null)}
           >
             <div className="flex items-center justify-between text-xs mb-1">
-              <span className="flex items-center gap-1.5 text-slate-600 font-medium">
+              <span className="flex items-center gap-1.5 text-ink-600 font-medium">
                 <span
                   className="h-2 w-2 rounded-sm shrink-0"
                   style={{ backgroundColor: colorFor(row.name, names) }}
                 />
                 {row.name}
               </span>
-              {/* The direct label is not decoration: it is the relief that lets these
-                  hues be used on a light surface at all. */}
-              <span className="text-slate-900 font-semibold tabular-nums">
+              {/* The numeric value remains readable independently of bar color. */}
+              <span className="text-ink-900 font-semibold tabular-nums">
                 {format(row[valueKey])}
               </span>
             </div>
-            <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
+            <div className="h-2 w-full rounded-full bg-ink-100 overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-300"
                 style={{
@@ -87,7 +82,7 @@ export const BarList = ({ rows, valueKey, format, label, names }) => {
               />
             </div>
             {isHovered && (
-              <div className="mt-1 text-[11px] text-slate-500 tabular-nums">
+              <div className="mt-1 text-xs text-ink-500 tabular-nums">
                 {row.calls} calls · {row.errors} errors · {count(row.tokens)} tokens ·
                 avg {duration(row.avg_latency_ms)} · {count(row.cost_unknown_count)} costs unknown
               </div>
@@ -151,10 +146,10 @@ export const LatencyScatter = ({ calls, names }) => {
               x2={width - pad.right}
               y1={y(t)}
               y2={y(t)}
-              stroke="#e2e8f0"
+              stroke="var(--sillage-line)"
               strokeWidth="1"
             />
-            <text x={pad.left - 8} y={y(t) + 3} textAnchor="end" fontSize="10" fill="#94a3b8">
+            <text x={pad.left - 8} y={y(t) + 4} textAnchor="end" fontSize="12" fill="var(--sillage-muted)">
               {t >= 1000 ? `${t / 1000}s` : `${t}ms`}
             </text>
           </g>
@@ -171,7 +166,7 @@ export const LatencyScatter = ({ calls, names }) => {
               cy={cy}
               r={isHovered ? 6 : 4.5}
               fill={failed ? 'none' : colorFor(call.agent_name, names)}
-              stroke={failed ? STATUS.critical : '#ffffff'}
+              stroke={failed ? STATUS.critical : 'var(--sillage-surface)'}
               strokeWidth={failed ? 2 : 1.5}
               opacity={hovered && !isHovered ? 0.4 : 1}
               onMouseEnter={() => setHovered(call)}
@@ -188,16 +183,16 @@ export const LatencyScatter = ({ calls, names }) => {
       </svg>
 
       {hovered && (
-        <div className="absolute top-0 right-0 bg-slate-900 text-white text-[11px] rounded-md px-2.5 py-2 shadow-lg pointer-events-none max-w-[280px]">
+        <div className="cg-chart-tooltip absolute top-0 right-0 rounded-md px-3 py-2 shadow-lg pointer-events-none max-w-[280px]">
           <div className="font-semibold">{hovered.agent_name}</div>
-          <div className="text-slate-300 tabular-nums">
+          <div className="text-ink-300 tabular-nums">
             {duration(hovered.latency_ms)}{hovered.status === 'error' ? ' (error)' : ''}{' '}
             · {count(hovered.total_tokens)} tok · {money(hovered.cost_usd)}
           </div>
-          <div className="text-slate-400 truncate">{hovered.model}</div>
+          <div className="text-ink-300 truncate">{hovered.model}</div>
         </div>
       )}
-      <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-3">
+      <div className="text-xs text-ink-400 mt-1 flex items-center gap-3">
         <span>oldest → newest</span>
         <span>log scale</span>
         <span className="flex items-center gap-1">
@@ -244,7 +239,7 @@ export const RunWaterfall = ({ calls, names }) => {
         return (
           <div
             key={call.id || i}
-            className="flex items-center gap-3"
+            className="cg-waterfall-row"
             onMouseEnter={() => setHovered(call.id)}
             onMouseLeave={() => setHovered(null)}
             onFocus={() => setHovered(call.id)}
@@ -252,10 +247,10 @@ export const RunWaterfall = ({ calls, names }) => {
             tabIndex="0"
             aria-label={`${call.agent_name}: ${Math.round(call.latency_ms)}ms${failed ? ', observed error' : ''}`}
           >
-            <div className="w-36 shrink-0 text-xs text-slate-600 truncate text-right">
+            <div className="cg-waterfall-name">
               {call.agent_name}
             </div>
-            <div className="flex-1 h-6 relative rounded bg-slate-50">
+            <div className="flex-1 h-6 relative rounded bg-ink-50">
               <div
                 className="absolute top-1 h-4 rounded transition-opacity"
                 style={{
@@ -264,12 +259,12 @@ export const RunWaterfall = ({ calls, names }) => {
                   transform: duration === 0 && left === 100 ? 'translateX(-2px)' : undefined,
                   backgroundColor: failed ? STATUS.critical : colorFor(call.agent_name, names),
                   // 2px surface gap so adjacent spans never fuse into one bar.
-                  boxShadow: '0 0 0 2px #ffffff',
+                  boxShadow: '0 0 0 2px var(--sillage-surface)',
                   opacity: hovered && hovered !== call.id ? 0.45 : 1,
                 }}
               />
             </div>
-            <div className="w-24 shrink-0 text-xs tabular-nums text-slate-500 text-right">
+            <div className="cg-waterfall-value">
               <span style={{ color: failed ? STATUS.critical : undefined }}>
                 {`${Math.round(call.latency_ms).toLocaleString()}ms`}{failed && ' · error'}
               </span>
@@ -277,13 +272,13 @@ export const RunWaterfall = ({ calls, names }) => {
           </div>
         );
       })}
-      <div className="flex items-center gap-3 pt-1">
-        <div className="w-36 shrink-0" />
-        <div className="flex-1 flex justify-between text-[11px] text-slate-400 tabular-nums">
+      <div className="cg-waterfall-axis">
+        <div />
+        <div className="flex-1 flex justify-between text-xs text-ink-400 tabular-nums">
           <span>0ms</span>
           <span>{duration(total)}</span>
         </div>
-        <div className="w-24 shrink-0" />
+        <div />
       </div>
     </div>
   );

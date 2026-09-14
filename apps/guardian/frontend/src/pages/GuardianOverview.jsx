@@ -10,18 +10,18 @@ import useLiveData from '@/hooks/useLiveData';
 import { isKnown, money, duration, observedCost, count } from '@/lib/liveFormat';
 
 const SEVERITY_STYLES = {
-  high: 'bg-red-100 text-red-700', medium: 'bg-amber-100 text-amber-700', low: 'bg-slate-100 text-slate-700',
+  high: 'bg-danger-100 text-danger-700', medium: 'bg-ochre-100 text-ochre-700', low: 'bg-ink-100 text-ink-700',
 };
 const StatCard = ({ icon: Icon, label, value, sub }) => (
   <Card><CardContent className="pt-6"><div className="flex items-start justify-between">
-    <div><p className="text-sm text-slate-500">{label}</p>
-      <p className="text-2xl font-semibold text-slate-900 mt-1">{value}</p>
-      <p className="text-xs text-slate-500 mt-1">{sub}</p>
-    </div><Icon className="h-5 w-5 text-slate-400" />
+    <div><p className="text-sm text-ink-500">{label}</p>
+      <p className="text-2xl font-semibold text-ink-900 mt-1">{value}</p>
+      <p className="text-xs text-ink-500 mt-1">{sub}</p>
+    </div><Icon className="h-5 w-5 text-ink-400" />
   </div></CardContent></Card>
 );
-const Notice = ({ children }) => <Card className="mb-4 border-amber-200 bg-amber-50">
-  <CardContent className="py-3"><p role="status" className="text-sm text-amber-900">{children}</p></CardContent>
+const Notice = ({ children }) => <Card className="mb-4 border-ochre-200 bg-ochre-50">
+  <CardContent className="py-3"><p role="status" className="text-sm text-ochre-900">{children}</p></CardContent>
 </Card>;
 const weightedMean = (parts) => {
   const weight = parts.reduce((total, part) => total + part.weight, 0);
@@ -40,23 +40,23 @@ const SourceSnapshot = ({ data, loading, error }) => {
     : stats?.tokens_known_count > 0 ? `${count(stats.known_total_tokens)} known` : 'Unknown';
   return <section aria-label="Source activity" className="mb-8">
     <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
-      <div><p className="text-xs uppercase tracking-widest text-teal-700 mb-2">Your application / last 24 hours</p>
-        <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Application activity</h2>
-        <p className="text-sm text-slate-500 mt-2">Usage, performance and errors from the same captured observations as Live activity.</p>
+      <div><p className="text-xs uppercase tracking-widest text-brick-700 mb-2">Your application / last 24 hours</p>
+        <h2 className="cg-page-title text-3xl font-semibold tracking-tight text-ink-900">Application activity</h2>
+        <p className="text-sm text-ink-500 mt-2">Usage, performance and errors from the same captured observations as Live activity.</p>
       </div>
-      <Link to="/live" className="inline-flex items-center gap-2 text-sm font-medium text-teal-800 py-2">Explore activity <ArrowUpRight className="h-4 w-4" /></Link>
+      <Link to="/live" className="inline-flex items-center gap-2 text-sm font-medium text-brick-800 py-2">Explore activity <ArrowUpRight className="h-4 w-4" /></Link>
     </div>
-    {loading ? <p role="status" className="text-sm text-slate-500">Loading source activity...</p>
+    {loading ? <p role="status" className="text-sm text-ink-500">Loading source activity...</p>
       : !available ? <Notice><strong>Source activity is unavailable.</strong> {data?.reason || 'Check your connection to see captured calls.'}
         {' '}A missing read does not mean zero traffic. <Link to="/setup" className="underline">Check connection</Link></Notice>
       : <>
         {(data.stale || error) && <Notice>Showing stale source activity from {data.fetched_at || 'an unknown time'}. The latest refresh failed.</Notice>}
-        <div className="rounded-xl border border-teal-100 bg-teal-50/50 p-4 mb-5 text-sm">
+        <div className="rounded-xl border border-brick-100 bg-brick-50/50 p-4 mb-5 text-sm">
           <strong>{direct ? 'Direct capture' : 'Langfuse source'}</strong>
-          <p className="text-slate-600 mt-1">{direct
+          <p className="text-ink-600 mt-1">{direct
             ? 'Your application sends completed-call measurements to Sillage. The worker processes receipts into the observations shown here. Test receipts are excluded.'
             : 'Sillage reads generation observations from your connected Langfuse project. The worker separately checks them for incidents and builds hourly history.'}</p>
-          <p className="text-xs text-slate-500 mt-2">{coverage?.status === 'complete' ? 'Source query complete' : 'Partial observation coverage'}
+          <p className="text-xs text-ink-500 mt-2">{coverage?.status === 'complete' ? 'Source query complete' : 'Partial observation coverage'}
             {data.fetched_at && <> · source data from {data.fetched_at}</>}. Delayed telemetry and source retention can limit accessible history.</p>
         </div>
         {coverage?.status !== 'complete' && <Notice>These are accepted observations, not full-window totals.
@@ -65,12 +65,12 @@ const SourceSnapshot = ({ data, loading, error }) => {
           {(coverage?.invalid_count || 0) > 0 && <> {count(coverage.invalid_count)} records need review.</>}
         </Notice>}
         {stats.call_count === 0 ? <Card><CardContent className="py-7">
-          <h3 className="font-semibold text-slate-900">{pending > 0 ? 'Your received events are being processed.' : 'Connect one real application call.'}</h3>
-          <p className="text-sm text-slate-500 mt-2">{pending > 0
+          <h3 className="font-semibold text-ink-900">{pending > 0 ? 'Your received events are being processed.' : 'Connect one real application call.'}</h3>
+          <p className="text-sm text-ink-500 mt-2">{pending > 0
             ? 'Captured observations will appear when processing completes. Check connection status if the queue does not clear.'
             : 'No accepted LLM calls were returned in the last 24 hours. A connection test checks delivery; it does not populate production charts.'}</p>
-          <Link to="/setup" className="inline-flex text-sm text-teal-800 font-medium mt-4 underline">Open connection setup</Link>
-          <a href="/demo" className="inline-flex text-sm text-slate-600 ml-5 underline">Explore the sample workspace</a>
+          <Link to="/setup" className="inline-flex text-sm text-brick-800 font-medium mt-4 underline">Open connection setup</Link>
+          <a href="/demo" className="inline-flex text-sm text-ink-600 ml-5 underline">Explore the sample workspace</a>
         </CardContent></Card> : <>
           <div className="grid grid-cols-2 xl:grid-cols-5 gap-3 mb-5">
             <StatCard icon={Activity} label="Captured calls (24h)" value={count(stats.call_count)} sub="Accepted source observations" />
@@ -83,12 +83,12 @@ const SourceSnapshot = ({ data, loading, error }) => {
             <CardDescription>Follow related calls to inspect their measurements and timing.</CardDescription>
           </CardHeader><CardContent className="p-0">
             {(data.runs || []).map((run) => <Link key={run.id} to={`/runs/${encodeURIComponent(run.id)}`}
-              className="flex items-center justify-between gap-4 px-6 py-3 border-t hover:bg-teal-50/50">
+              className="flex items-center justify-between gap-4 px-6 py-3 border-t hover:bg-brick-50/50">
               <div className="min-w-0"><p className="text-sm font-medium truncate">{run.name}</p>
-                <p className="text-xs text-slate-500">{count(run.call_count)} calls · {count(run.error_count)} errors</p></div>
+                <p className="text-xs text-ink-500">{count(run.call_count)} calls · {count(run.error_count)} errors</p></div>
               <span className="text-xs tabular-nums">{observedCost(run.cost_usd, run.known_cost_usd, run.cost_known_count)}</span>
             </Link>)}
-            {!data.runs?.length && <p className="px-6 pb-5 text-sm text-slate-500">No trace rows were returned. <Link className="underline" to="/live">Inspect the call feed</Link>.</p>}
+            {!data.runs?.length && <p className="px-6 pb-5 text-sm text-ink-500">No trace rows were returned. <Link className="underline" to="/live">Inspect the call feed</Link>.</p>}
           </CardContent></Card>
         </>}
       </>}
@@ -102,18 +102,18 @@ const DirectProcessing = ({ capture }) => {
   const workerAttention = capture.worker_status !== 'current';
   return <Card className="mb-5"><CardContent className="py-4">
     <p className="font-medium text-sm">Direct capture processing</p>
-    <p className="text-sm text-slate-600 mt-1">{count(capture.received_events)} production events received · {count(capture.processed_events)} processed · {count(capture.pending_events)} awaiting processing.</p>
-    <p className="text-xs text-slate-500 mt-2">{capture.worker_status === 'current' ? 'Recent worker heartbeat.'
+    <p className="text-sm text-ink-600 mt-1">{count(capture.received_events)} production events received · {count(capture.processed_events)} processed · {count(capture.pending_events)} awaiting processing.</p>
+    <p className="text-xs text-ink-500 mt-2">{capture.worker_status === 'current' ? 'Recent worker heartbeat.'
       : capture.worker_status === 'stale' ? 'The worker heartbeat is stale.' : 'The worker has not reported yet.'}
       {' '}A heartbeat alone does not confirm successful monitoring.
       {capture.last_processed_at && <> Last processed event: {capture.last_processed_at}.</>}
     </p>
-    {(pending || conflicts || workerAttention) && <p role="status" className="text-sm text-amber-800 mt-2">
+    {(pending || conflicts || workerAttention) && <p role="status" className="text-sm text-ochre-800 mt-2">
       {pending && <>Received events are waiting for the worker. </>}
       {conflicts && <>{count(capture.conflicted_events)} conflicting observations need review. </>}
       <Link to="/setup" className="underline">Check connection and processing status</Link>.
     </p>}
-    {capture.received_events === 0 && capture.last_test_received_at && <p className="text-sm text-slate-600 mt-2">A test receipt arrived. Send a real application call to start filling production views.</p>}
+    {capture.received_events === 0 && capture.last_test_received_at && <p className="text-sm text-ink-600 mt-2">A test receipt arrived. Send a real application call to start filling production views.</p>}
   </CardContent></Card>;
 };
 
@@ -184,7 +184,7 @@ const GuardianOverview = () => {
     <GuardianLayout refreshing={refreshing} lastUpdated={lastUpdated}>
       <SourceSnapshot data={source.data} loading={source.loading} error={source.error} />
       <div className="mb-4"><h2 className="text-xl font-semibold tracking-tight">Analysis &amp; hourly history</h2>
-        <p className="text-sm text-slate-500 mt-1">Worker-processed accounting covers 48 hours. Source activity above covers 24 hours; processing time and these different windows can change the totals.</p></div>
+        <p className="text-sm text-ink-500 mt-1">Worker-processed accounting covers 48 hours. Source activity above covers 24 hours; processing time and these different windows can change the totals.</p></div>
       {monitoringError ? <Notice>Worker monitoring is unavailable. Its current ingestion state cannot be established.</Notice>
         : monitoring?.source_kind === 'guardian_direct' ? <DirectProcessing capture={monitoring.capture} />
         : monitoring && !monitoring.healthy && <Notice>
@@ -199,7 +199,7 @@ const GuardianOverview = () => {
           {' '}Last successful ingestion checkpoint: {monitoring.last_successful_checkpoint || 'none recorded'}.
           {monitoring.stale && <> The worker has not reported within its expected interval.</>}
         </Notice>}
-      {monitoring?.healthy && <p className="text-xs text-slate-500 mb-4">
+      {monitoring?.healthy && <p className="text-xs text-ink-500 mb-4">
         Last successful ingestion checkpoint: {monitoring.last_successful_checkpoint || 'none recorded'}.
       </p>}
       {loading ? <p role="status">Loading hourly history...</p> : !data ? <Notice>Could not load Sillage data. Traffic and cost totals are unavailable for hourly history. Source activity is read separately above.</Notice> : (
@@ -208,7 +208,7 @@ const GuardianOverview = () => {
           {summaryIncomplete && <Notice>{count(data.coverage.invalid_timestamp_count)} incidents have invalid timestamps.
             {' '}Open counts remain available; recent counts and daily trends are incomplete.</Notice>}
           {ledgerAccounting
-            ? <p className="text-xs text-slate-500 mb-4">Hourly totals count captured observations once. {source.data?.source_kind === 'guardian_direct'
+            ? <p className="text-xs text-ink-500 mb-4">Hourly totals count captured observations once. {source.data?.source_kind === 'guardian_direct'
               ? 'Direct capture assigns accepted events to the hour they occurred; delayed processing can update earlier totals.'
               : 'Late arrivals are checked within a rolling 24-hour window; earlier history and upstream retention may limit coverage.'}</p>
             : data.metrics.length > 0 && <Notice>Hourly accounting is provisional. Replays and late observations in legacy totals are not reconciled.</Notice>}
@@ -227,7 +227,7 @@ const GuardianOverview = () => {
               value={totalCalls > 0 ? observedCost(unpriced || costUnavailable ? null : knownCost, costUnavailable ? null : knownCost, priced) : 'Unknown'}
               sub={`${count(totalCalls)} recorded calls; ${count(unpriced)} with unknown cost`} />
           </div>
-          <p className="text-xs text-slate-500 mb-6">Processed 48h history: {count(totalCalls)} recorded calls · {count(totalErrors)} observed errors · measured average {duration(avgLatency)}
+          <p className="text-xs text-ink-500 mb-6">Processed 48h history: {count(totalCalls)} recorded calls · {count(totalErrors)} observed errors · measured average {duration(avgLatency)}
             {' '}across {count(measured)} known durations; {count(sum('missingLatency'))} missing. Workflow outcomes are not inferred.</p>
           {overview && Object.keys(overview.open_by_severity || {}).length > 0 && <div className="flex gap-2 mb-6">
             {Object.entries(overview.open_by_severity).map(([severity, value]) =>
@@ -235,7 +235,7 @@ const GuardianOverview = () => {
             {Object.entries(overview.open_by_detector || {}).map(([detector, value]) =>
               <Badge key={detector} variant="outline">{detector}: {value}</Badge>)}
           </div>}
-          <p className="text-xs text-slate-500 mb-4">Chart dates and hours are UTC; the current hour and today are partial.</p>
+          <p className="text-xs text-ink-500 mb-4">Chart dates and hours are UTC; the current hour and today are partial.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <Card><CardHeader className="pb-2"><CardTitle className="text-base">Recorded cost per hour</CardTitle>
               <CardDescription>Captured observations. Gaps indicate hours with unknown cost coverage.</CardDescription>
@@ -244,17 +244,17 @@ const GuardianOverview = () => {
             <Card><CardHeader className="pb-2"><CardTitle className="text-base">Measured latency per hour</CardTitle>
               <CardDescription>Known durations only; missing measurements do not become zero.</CardDescription>
             </CardHeader><CardContent><LineChart points={hourly.map((h) => ({ label: h.label, value: h.avgLatency }))}
-              label="measured latency" formatValue={duration} color="#0369a1" /></CardContent></Card>
+              label="measured latency" formatValue={duration} color="var(--sillage-ochre)" /></CardContent></Card>
             <Card><CardHeader className="pb-2"><CardTitle className="text-base">Recorded errors per hour</CardTitle>
               <CardDescription>Observed LLM errors within captured telemetry.</CardDescription>
             </CardHeader><CardContent><LineChart points={hourly.map((h) => ({ label: h.label, value: h.errors }))}
-              label="error" color="#b91c1c" /></CardContent></Card>
+              label="error" color="var(--sillage-brick)" /></CardContent></Card>
             <Card><CardHeader className="pb-2"><CardTitle className="text-base">Incidents per day</CardTitle>
               <CardDescription>Last 14 UTC calendar days, including today (partial).</CardDescription>
             </CardHeader><CardContent><BarChart points={(data.trends || []).map((t) => ({ label: t.date.slice(5), value: t.count }))}
               label="incident" /></CardContent></Card>
           </div>
-          <button onClick={() => navigate('/incidents')} className="text-sm text-slate-600 hover:text-slate-900 underline">View all incidents →</button>
+          <button onClick={() => navigate('/incidents')} className="text-sm text-ink-600 hover:text-ink-900 underline">View all incidents →</button>
         </>
       )}
     </GuardianLayout>

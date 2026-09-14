@@ -1,0 +1,24 @@
+/* Self-hosted Latin fonts. Full OFL notices ship with the public build. */
+@font-face {
+  font-family: 'Instrument Serif';
+  src: url('./assets/fonts/InstrumentSerif-Regular.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Instrument Serif';
+  src: url('./assets/fonts/InstrumentSerif-Italic.woff2') format('woff2');
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Manrope';
+  src: url('./assets/fonts/Manrope-Variable.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+}

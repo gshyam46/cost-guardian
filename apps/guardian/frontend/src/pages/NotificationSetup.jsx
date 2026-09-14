@@ -96,25 +96,25 @@ export function NotificationHistory({ state, incident = false }) {
   if (!state.data) return null;
   const rows = state.data.deliveries;
   return <section aria-label="Recent notification deliveries" className="space-y-3">
-    <h3 className="font-medium text-slate-900">Recent deliveries</h3>
+    <h3 className="font-medium text-ink-900">Recent deliveries</h3>
     <p className="text-xs">Showing {rows.length} recent delivery records{state.data.has_more ? '; older records are omitted' : ''}. Slack acceptance does not establish that someone read the message.</p>
     {!rows.length && <p>{incident ? 'No recent delivery records are shown for this incident. Older incidents are not backfilled when notifications are enabled.' : 'No recent delivery records are shown.'}</p>}
     {rows.map((row) => <article key={row.id} className="rounded border p-3 space-y-2" aria-label={`Delivery ${row.id}`}>
-      <div className="flex flex-wrap justify-between gap-2"><h4 className="font-medium text-slate-900">{row.kind === 'test' ? 'Test notification' : 'Incident notification'}</h4>
-        <span className="font-medium text-slate-800">{deliveryStateText(row.state)}</span></div>
+      <div className="flex flex-wrap justify-between gap-2"><h4 className="font-medium text-ink-900">{row.kind === 'test' ? 'Test notification' : 'Incident notification'}</h4>
+        <span className="font-medium text-ink-800">{deliveryStateText(row.state)}</span></div>
       {!incident && row.incident_id && <Link className="underline break-all" to={`/incidents/${encodeURIComponent(row.incident_id)}`}>View incident</Link>}
       <dl className="space-y-1 text-xs"><div><dt className="inline">Created: </dt><dd className="inline"><NotificationTime value={row.created_at} /></dd></div>
         <div><dt className="inline">Last update: </dt><dd className="inline"><NotificationTime value={row.updated_at} /></dd></div>
         <div><dt className="inline">Attempts: </dt><dd className="inline">{row.attempt_count} of 15; cycle {row.cycle} of 3</dd></div>
         {row.next_attempt_at && <div><dt className="inline">Next attempt: </dt><dd className="inline"><NotificationTime value={row.next_attempt_at} /></dd></div>}</dl>
       <p>{outcomeText(row.last_outcome)}</p>
-      {row.state === 'unconfirmed' && <p className="text-amber-900">An unconfirmed attempt may already have reached Slack.</p>}
+      {row.state === 'unconfirmed' && <p className="text-ochre-900">An unconfirmed attempt may already have reached Slack.</p>}
       {row.attempts.length > 0 && <details><summary className="cursor-pointer text-xs">Recorded attempts ({row.attempts.length} of {row.attempt_count})</summary>
         <ol className="mt-2 space-y-2 text-xs">{row.attempts.map((attempt) => <li key={attempt.number}>Attempt {attempt.number} started: <NotificationTime value={attempt.started_at} />
           {attempt.finished_at !== null && <p>Finished: <NotificationTime value={attempt.finished_at} /></p>}
           <p>{attempt.finished_at === null ? 'Awaiting outcome.' : outcomeText(attempt.outcome)}</p></li>)}</ol>
       </details>}
-      {state.canManage && row.can_retry && <div className="space-y-2"><p className="text-xs text-amber-900">Retrying can send another copy. An unconfirmed attempt may already have reached Slack.</p>
+      {state.canManage && row.can_retry && <div className="space-y-2"><p className="text-xs text-ochre-900">Retrying can send another copy. An unconfirmed attempt may already have reached Slack.</p>
         <Button variant="outline" size="sm" disabled={!state.canAct || state.data.destination.state !== 'configured'} onClick={() => state.perform('retry', row.id)}>Retry notification</Button></div>}
     </article>)}
   </section>;
@@ -123,9 +123,9 @@ export function NotificationHistory({ state, incident = false }) {
 export function NotificationFeedback({ state }) {
   return <>
     {state.loading && <p role="status">{state.data ? 'Refreshing notification status...' : 'Loading notification status...'}</p>}
-    {state.error && <div role="alert" className="rounded border border-amber-200 bg-amber-50 p-3 text-amber-950"><p>{state.error}</p>
+    {state.error && <div role="alert" className="rounded border border-ochre-200 bg-ochre-50 p-3 text-ochre-950"><p>{state.error}</p>
       {state.data && <p className="mt-1">Showing previously fetched notification status; the current state is unconfirmed.</p>}</div>}
-    {state.notice && <p role="status" className="text-slate-800">{state.notice}</p>}
+    {state.notice && <p role="status" className="text-ink-800">{state.notice}</p>}
     {state.action && <p role="status">Submitting notification action...</p>}
     <Button variant="outline" onClick={state.load} disabled={state.loading || !!state.action}>Refresh notification status</Button>
   </>;
@@ -136,16 +136,16 @@ export default function NotificationSetup() {
   const target = state.data?.destination;
   const pendingTest = target?.state === 'configured' && state.data?.deliveries.some((row) => row.kind === 'test' && ['queued', 'sending', 'retrying'].includes(row.state));
   return <Card className="mt-6" aria-labelledby="notification-setup-title"><CardHeader><h2 id="notification-setup-title" className="font-semibold text-lg">Notifications</h2></CardHeader>
-    <CardContent className="space-y-4 text-sm text-slate-600">
+    <CardContent className="space-y-4 text-sm text-ink-600">
       <p>Send new incident notifications to the deployment's Slack destination. Its webhook secret stays on the server.</p>
       <NotificationFeedback state={state} />
       {state.data && <>
-        <section className="rounded border bg-slate-50 p-3 space-y-2" aria-label="Slack destination status">
-          <p className="font-medium text-slate-900">{({ not_configured: 'Slack destination not configured', invalid: 'Slack destination configuration is invalid',
+        <section className="rounded border bg-ink-50 p-3 space-y-2" aria-label="Slack destination status">
+          <p className="font-medium text-ink-900">{({ not_configured: 'Slack destination not configured', invalid: 'Slack destination configuration is invalid',
             configured: 'Slack destination configured', changed: 'Slack destination changed' })[target.state]}</p>
           {target.state === 'configured' ? <p>{target.verified ? 'Slack accepted a test for the current destination.' : 'A successful test is required before enabling incident notifications.'}</p>
             : <p>{target.state === 'changed' ? 'Previous verification and activation no longer apply. Send a new test after the operator confirms the destination.' : 'Ask your deployment operator to configure the Slack incoming webhook.'}</p>}
-          <p className="font-medium text-slate-800">{target.enabled ? 'New incident notifications enabled' : 'New incident notifications disabled'}</p>
+          <p className="font-medium text-ink-800">{target.enabled ? 'New incident notifications enabled' : 'New incident notifications disabled'}</p>
           <p>{({ unknown: 'Delivery worker status unknown', healthy: 'Recent delivery worker heartbeat', stale: 'Delivery worker heartbeat is stale', blocked: 'Delivery worker is blocked' })[state.data.worker.status]}</p>
           <p className="text-xs">Last delivery worker heartbeat: <NotificationTime value={state.data.worker.last_seen_at} /></p>
           {state.data.updated_at && <p className="text-xs">Settings updated: <NotificationTime value={state.data.updated_at} /></p>}

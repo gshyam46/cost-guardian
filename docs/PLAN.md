@@ -1,5 +1,11 @@
 # Sillage: implementation plan
 
+## Cream and brick product refresh, 2026-09-14
+
+Follow ADR-53 and [DESIGN_REFRESH.md](DESIGN_REFRESH.md): redesign the landing/demo, complete workspace theme, local typography and matching vector brand assets; use normal Sign up/Sign in navigation with confirmed registration leading to a waitlist page. Preserve storage/auth semantics, verify both build modes and desktop/mobile journeys, refresh the owned preview and update documentation with measured results.
+
+Implemented and verified on 2026-09-15: 396 frontend tests, 29 public server/build tests, 53 static-boundary tests (one platform skip), 69 workspace browser scenarios, ten actual public browser/Mongo phases and all eight native onboarding/restart/outage phases pass. Both clean build modes include the matching local fonts and brand assets. Desktop and 320/390px mobile previews were reviewed; the public preview runs on port 3004 and the preserved workspace on 8001. [VALIDATION.md](VALIDATION.md) records the exact artifacts. Next complete the existing hosted-public setup and independent customer activation gates; visual completion does not provision customer accounts.
+
 ## Public frontend deployment and registration, 2026-09-14
 
 Follow ADR-52 and [PUBLIC_LAUNCH.md](PUBLIC_LAUNCH.md): independent Vercel public site, bounded workspace availability check, clear unavailable/coming-soon path, durable early-access records, operator export/deletion and actual outage/recovery verification. Preserve existing workspace authentication and runtime. Prepare the code and deployment configuration now; verify the external Vercel project and hosted database before claiming a live signup service.

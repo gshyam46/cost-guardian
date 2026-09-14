@@ -95,6 +95,33 @@ async def test_hashed_assets_are_immutable_and_head_is_bodyless(build):
 
 
 @pytest.mark.anyio
+async def test_named_brand_assets_and_font_license_are_served_without_directory_exposure(build):
+    (build / 'favicon.svg').write_bytes(b'<svg xmlns="http://www.w3.org/2000/svg"/>')
+    (build / 'apple-touch-icon.png').write_bytes(b'synthetic-icon')
+    (build / 'Manrope-OFL.txt').write_bytes(b'Synthetic font license')
+    (build / 'private-notes.txt').write_bytes(b'private-file-must-not-ship')
+    app = application(build)
+    # Files are immutable in memory for the process lifetime, even public copies.
+    (build / 'Manrope-OFL.txt').write_bytes(b'changed-after-start')
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+        for url, mime in [('/favicon.svg', 'image/svg+xml'), ('/apple-touch-icon.png', 'image/png'), ('/Manrope-OFL.txt', 'text/plain')]:
+            response = await client.get(url)
+            assert response.status_code == 200 and response.headers['content-type'].startswith(mime)
+            assert response.headers['cache-control'] == 'no-store'
+        assert (await client.get('/Manrope-OFL.txt')).content == b'Synthetic font license'
+        assert (await client.head('/favicon.svg')).content == b''
+        assert (await client.get('/private-notes.txt')).status_code == 404
+
+
+def test_copied_brand_file_retains_size_bound(build, monkeypatch):
+    from deployment import static
+    (build / 'favicon.svg').write_bytes(b'x' * 4096)
+    monkeypatch.setattr(static, 'MAX_METADATA_BYTES', 2048)
+    with pytest.raises(ValueError, match='invalid_static_build'):
+        validate_static_directory(build)
+
+
+@pytest.mark.anyio
 async def test_installed_snapshot_does_not_read_replaced_files(build):
     app = application(build)
     (build / JS[1:]).write_bytes(b"private-replacement-canary")

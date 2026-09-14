@@ -9,7 +9,7 @@ import GuardianIncidentDetail from "@/pages/GuardianIncidentDetail";
 import ConnectScreen from "@/pages/ConnectScreen";
 import GuardianSetup from "@/pages/GuardianSetup";
 import GuardianWelcome from "@/pages/GuardianWelcome";
-import PublicAccess, { PrivacyNotice } from '@/pages/PublicAccess';
+import PublicAccess, { PrivacyNotice, WaitlistPage } from '@/pages/PublicAccess';
 import { Button } from "@/components/ui/button";
 import guardianApi, { announceLogout, clearApiKey, clearSessionAccess, configureAuth, getApiKey, getLoginUrl, LOGOUT_NOTICE, setApiKey, setSessionAccess } from "@/services/guardianApi";
 import { beginLogin, restoreLoginPath, validAccess, validAuthConfig } from '@/services/guardianIdentity';
@@ -258,6 +258,7 @@ function App() {
   }
   if (publicSite) {
     if (path === '/privacy') return <PrivacyNotice />;
+    if (path === '/waitlist') return <WaitlistPage confirmed={false} />;
     if (['/signin', '/setup', '/signup'].includes(path)) {
       return <PublicAccess intent={path === '/signup' ? 'signup' : path === '/setup' ? 'onboarding' : 'signin'} />;
     }

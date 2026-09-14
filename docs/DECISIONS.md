@@ -1,5 +1,9 @@
 # Sillage: decision register
 
+## ADR-53: cream and brick identity and registration before waitlist, 2026-09-14
+
+The founder requested a complete Sillage theme refresh, premium typography and matching brand assets, with ordinary Sign up/Sign in actions and availability communicated after registration. [DESIGN_REFRESH.md](DESIGN_REFRESH.md) records the visual system, product scope and acceptance before implementation. Retain explicit contact consent and committed-write acknowledgment; the waitlist confirmation does not provision an account or workspace. Existing authentication, numeric telemetry and retention contracts remain authoritative.
+
 ## ADR-52: independent public frontend and durable early-access registration, 2026-09-14
 
 Accepted implementation scope is recorded before code in [PUBLIC_LAUNCH.md](PUBLIC_LAUNCH.md): host the public experience and small availability/registration functions on Vercel while keeping workspace OIDC, monitoring intake and workers on their existing runtime. A backend outage must leave the landing/demo and contact-registration path usable. Early-access records require acknowledged independent storage and explicit contact consent; they do not create workspace accounts. Preserve the current self-hosted access flow. Hosted account/database configuration and actual deployment proof remain explicit prerequisites.
